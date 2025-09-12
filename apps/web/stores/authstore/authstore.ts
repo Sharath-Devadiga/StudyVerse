@@ -5,17 +5,14 @@ import { AuthStore, User } from '../authstore/types'
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set, get) => ({
-      // State
       user: null,
       isAuthenticated: false,
       isLoading: true,
 
-      // Actions
       setUser: (user: User) => 
         set({ user, isAuthenticated: true, isLoading: false }),
 
       logout: () => {
-        // Clear cookie by calling backend logout
         fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/auth/logout`, {
           method: 'POST',
           credentials: 'include'

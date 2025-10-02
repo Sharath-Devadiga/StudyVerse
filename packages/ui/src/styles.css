@@ -1,2 +1,4 @@
 /* Component-level styles for the UI package */
-@import "tailwindcss" prefix(ui);
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

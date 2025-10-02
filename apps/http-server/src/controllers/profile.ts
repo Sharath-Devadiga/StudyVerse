@@ -6,7 +6,6 @@ interface AuthenticatedRequest extends Request {
   user?: { id: string; };
 }
 
-// GET /api/me - Fetches the current user's profile
 export const getUserProfile = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     // --- FIX: Add a guard clause to ensure the user is authenticated ---

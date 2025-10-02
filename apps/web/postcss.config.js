@@ -1,3 +1,8 @@
-import { postcssConfig } from "@repo/tailwind-config/postcss";
-
-export default postcssConfig;
+/** @type {import('postcss').Config} */
+export default {
+  plugins: {
+    'postcss-import': {},
+    'tailwindcss': {},
+    'autoprefixer': {},
+  },
+};

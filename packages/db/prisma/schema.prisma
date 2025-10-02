@@ -22,6 +22,8 @@ model User {
   messages      Message[]
   departmentId  String?      
   department    Department?  @relation(fields: [departmentId], references: [id])
+  universityId String?
+  university   University?  @relation(fields: [universityId], references: [id])
   }
 
 model Admin {
@@ -35,6 +37,7 @@ model University {
   id          String      @id @default(uuid())
   name        String      @unique
  departments    Department[]
+ users  User[]
 }
 
 model Department{

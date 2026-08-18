@@ -26,19 +26,23 @@ export const googleCallback = async (req: Request, res: Response) => {
   if (!code) return res.status(400).json({ error: "No code provided" });
 
   try {
-    const { data } = await axios.post(
-      GOOGLE_CONFIG.token_uri,
-      {
-        code,
-        client_id: GOOGLE_CONFIG.client_id,
-        client_secret: GOOGLE_CONFIG.client_secret,
-        redirect_uri: GOOGLE_CONFIG.redirect_uri,
-        grant_type: "authorization_code",
-      },
-      {
-        headers: { "Content-Type": "application/json" },
-      }
-    );
+  const params = new URLSearchParams({
+  code,
+  client_id: GOOGLE_CONFIG.client_id,
+  client_secret: GOOGLE_CONFIG.client_secret,
+  redirect_uri: GOOGLE_CONFIG.redirect_uri,
+  grant_type: "authorization_code",
+});
+
+const { data } = await axios.post(
+  GOOGLE_CONFIG.token_uri,
+  params.toString(),
+  {
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+  }
+);
 
     const { id_token } = data;
 
@@ -90,12 +94,17 @@ export const googleCallback = async (req: Request, res: Response) => {
       sameSite: "lax",
     });
 
-    res.redirect(`${process.env.FRONTEND_URL}/auth/success`);
+res.redirect(`${process.env.FRONTEND_URL}/success?action=${action}`);
   } catch (e: any) {
-    res.status(500).json({
-      error: "Google authentication failed",
-      details: e.message,
-    });
+    console.error("GOOGLE OAUTH ERROR");
+  console.error("Status:", e.response?.status);
+  console.error("Response:", e.response?.data);
+  console.error("Message:", e.message);
+
+  res.status(500).json({
+    error: "Google authentication failed",
+    details: e.response?.data || e.message,
+  });
   }
 };
 

@@ -3,11 +3,10 @@ import { Server as HttpServer } from "http";
 import { authMiddleware } from "./middleware/auth";
 import { registerChatHandlers } from "./events/chatHandler";
 
-
 export const initSocketServer = (httpServer: HttpServer): Server => {
   const io = new Server(httpServer, {
     cors: {
-      origin: "http://localhost:3000",
+      origin: process.env.FRONTEND_URL || "http://localhost:3000",
       methods: ["GET", "POST"],
       credentials: true,
     },
@@ -16,12 +15,14 @@ export const initSocketServer = (httpServer: HttpServer): Server => {
   io.use(authMiddleware);
 
   const onConnection = (socket: Socket) => {
-    console.log(`User connected: ${socket.data.user.username} (${socket.id})`);
+    const displayName =
+      socket.data.user.username || socket.data.user.name || socket.data.user.id;
+    console.log(`User connected: ${displayName} (${socket.id})`);
 
     registerChatHandlers(io, socket);
 
     socket.on("disconnect", () => {
-      console.log(`User disconnected: ${socket.data.user.username} (${socket.id})`);
+      console.log(`User disconnected: ${displayName} (${socket.id})`);
     });
   };
 

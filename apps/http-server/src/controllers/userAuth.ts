@@ -1,9 +1,8 @@
 import { Request, Response } from "express";
 import { prisma } from "@repo/db/prisma";
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
-
-const JWT_SECRET = process.env.JWT_SECRET!;
+import { generateJwt } from "../utils/generateJwt";
+import { safeUserSelect } from "../utils/safeUser";
 
 export const signup = async (req: Request, res: Response) => {
   try {
@@ -28,9 +27,12 @@ export const signup = async (req: Request, res: Response) => {
         email,
         password: hashedPassword,
       },
+      select: safeUserSelect,
     });
 
-    return res.status(201).json({ message: "User created successfully", user });
+    return res
+      .status(201)
+      .json({ message: "User created successfully", user });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
@@ -58,22 +60,28 @@ export const signin = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "Invalid credentials" });
     }
 
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "7d" });
+    const token = generateJwt({ id: user.id, email: user.email });
 
     res.cookie("token", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
     });
 
-    return res.json({ message: "Login successful", token, user });
+    const { password: _, googleId: __, createdAt: ___, departmentId: ____, universityId: _____, ...safeUser } = user;
+
+return res.json({
+  message: "Login successful",
+  token,
+  user: safeUser,
+});
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: "Internal Server Error" });
   }
 };
 
-export const logout = async (req: Request, res: Response) => {
+export const logout = async (_req: Request, res: Response) => {
   res.clearCookie("token");
   return res.json({ message: "Logged out successfully" });
 };

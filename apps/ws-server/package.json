@@ -12,6 +12,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@repo/db": "workspace:*",
     "cookie": "^1.0.2",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
@@ -20,13 +21,13 @@
     "socket.io": "4.7.2"
   },
   "devDependencies": {
-    "@repo/db": "workspace:*",
     "@types/cookie": "^1.0.0",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.15.30",
     "@types/ws": "^8.18.1",
     "nodemon": "^3.1.10",
+    "socket.io-client": "^4.8.1",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"

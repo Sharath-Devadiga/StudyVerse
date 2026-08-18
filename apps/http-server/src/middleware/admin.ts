@@ -6,23 +6,39 @@ interface CustomJwtPayload extends JwtPayload {
   role: string;
 }
 
-export function adminMiddleware(req: Request, res: Response, next: NextFunction) {
+export function adminMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   try {
-    const token = req.headers.authorization?.split(" ")[1];
-    if (!token) {
-      return res.status(401).json({ message: "No token provided" });
+    let token: string | undefined;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) {
+      token = authHeader.split(" ")[1];
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as CustomJwtPayload;
+    if (!token) {
+      token = req.cookies.adminToken;
+    }
+
+    if (!token) {
+      return res.status(401).json({ error: "No token provided" });
+    }
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET!
+    ) as CustomJwtPayload;
 
     if (!decoded || decoded.role !== "admin") {
-      return res.status(403).json({ message: "Access denied. Admins only." });
+      return res.status(403).json({ error: "Access denied. Admins only." });
     }
 
-    (req as any).user = decoded;
-
+    (req as Request & { admin: CustomJwtPayload }).admin = decoded;
     next();
-  } catch (err) {
-    return res.status(401).json({ message: "Invalid token" });
+  } catch {
+    return res.status(401).json({ error: "Invalid token" });
   }
 }

@@ -4,6 +4,9 @@ import axios from "axios";
 import { OAuth2Client } from "google-auth-library";
 import { prisma } from "@repo/db/prisma";
 import { generateJwt } from "../utils/generateJwt";
+import { safeUserSelect } from "../utils/safeUser";
+
+const frontendUrl = () => process.env.FRONTEND_URL || "http://localhost:3000";
 
 export const googleAuth = (req: Request, res: Response) => {
   const action = (req.query.action as string) || "signin";
@@ -26,23 +29,23 @@ export const googleCallback = async (req: Request, res: Response) => {
   if (!code) return res.status(400).json({ error: "No code provided" });
 
   try {
-  const params = new URLSearchParams({
-  code,
-  client_id: GOOGLE_CONFIG.client_id,
-  client_secret: GOOGLE_CONFIG.client_secret,
-  redirect_uri: GOOGLE_CONFIG.redirect_uri,
-  grant_type: "authorization_code",
-});
+    const params = new URLSearchParams({
+      code,
+      client_id: GOOGLE_CONFIG.client_id,
+      client_secret: GOOGLE_CONFIG.client_secret,
+      redirect_uri: GOOGLE_CONFIG.redirect_uri,
+      grant_type: "authorization_code",
+    });
 
-const { data } = await axios.post(
-  GOOGLE_CONFIG.token_uri,
-  params.toString(),
-  {
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-  }
-);
+    const { data } = await axios.post(
+      GOOGLE_CONFIG.token_uri,
+      params.toString(),
+      {
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
 
     const { id_token } = data;
 
@@ -56,7 +59,6 @@ const { data } = await axios.post(
     if (!payload) return res.status(400).json({ error: "Invalid ID token" });
 
     const { sub, email, name, picture } = payload;
-
     const safeName: string = name ?? (email?.split("@")[0] ?? "Unknown");
 
     let user = await prisma.user.findUnique({
@@ -65,9 +67,7 @@ const { data } = await axios.post(
 
     if (action === "signup") {
       if (user) {
-        return res.redirect(
-          `${process.env.FRONTEND_URL}/auth/signin?error=user_exists`
-        );
+        return res.redirect(`${frontendUrl()}/login?error=user_exists`);
       }
 
       user = await prisma.user.create({
@@ -80,9 +80,7 @@ const { data } = await axios.post(
       });
     } else {
       if (!user) {
-        return res.redirect(
-          `${process.env.FRONTEND_URL}/auth/signup?error=user_not_found`
-        );
+        return res.redirect(`${frontendUrl()}/signup?error=user_not_found`);
       }
     }
 
@@ -94,30 +92,33 @@ const { data } = await axios.post(
       sameSite: "lax",
     });
 
-res.redirect(`${process.env.FRONTEND_URL}/success?action=${action}`);
-  } catch (e: any) {
-    console.error("GOOGLE OAUTH ERROR");
-  console.error("Status:", e.response?.status);
-  console.error("Response:", e.response?.data);
-  console.error("Message:", e.message);
-
-  res.status(500).json({
-    error: "Google authentication failed",
-    details: e.response?.data || e.message,
-  });
+    res.redirect(`${frontendUrl()}/success?action=${action}`);
+  } catch (e) {
+    console.error("Google OAuth error");
+    res.status(500).json({ error: "Google authentication failed" });
   }
 };
 
 export const getMe = async (req: Request, res: Response) => {
   try {
-    const user = (req as any).user;
+    const authUser = (req as Request & { user: { id: string } }).user;
+
+    const user = await prisma.user.findUnique({
+      where: { id: authUser.id },
+      select: safeUserSelect,
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
     res.json(user);
   } catch {
     res.status(401).json({ error: "Unauthorized" });
   }
 };
 
-export const logout = (req: Request, res: Response) => {
+export const logout = (_req: Request, res: Response) => {
   res.clearCookie("token");
   res.json({ message: "Logged out successfully" });
 };

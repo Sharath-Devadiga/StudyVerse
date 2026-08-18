@@ -1,10 +1,15 @@
-import { prisma } from '@repo/db';
-import type { User } from '@prisma/client';
-
 declare module "socket.io" {
   interface Socket {
     data: {
-      user: Pick<User, "id" | "username">;
+      user: {
+        id: string;
+        name: string;
+        email: string;
+        username?: string;
+        avatar?: string;
+      };
     };
   }
 }
+
+export {};

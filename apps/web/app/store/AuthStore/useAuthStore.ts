@@ -1,37 +1,76 @@
-import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { AuthState, User } from './types';
-import axios from 'axios';
-
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { AuthState } from "./types";
+import { logout as logoutApi } from "../../../lib/api/auth";
+import { clearStoredToken } from "../../../lib/utils";
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       user: null,
       isAuthenticated: false,
+      isHydrated: false,
+      rooms: [],
+      activeRoomId: null,
+      connectionStatus: "disconnected",
 
-      setUser: (user: User | null) => {
+      setUser: (user) => {
         set({ user, isAuthenticated: !!user });
+      },
+
+      setHydrated: (hydrated) => {
+        set({ isHydrated: hydrated });
+      },
+
+      setRooms: (rooms) => {
+        set({ rooms });
+      },
+
+      setActiveRoomId: (roomId) => {
+        set({ activeRoomId: roomId });
+      },
+
+      setConnectionStatus: (status) => {
+        set({ connectionStatus: status });
+      },
+
+      reset: () => {
+        clearStoredToken();
+        set({
+          user: null,
+          isAuthenticated: false,
+          rooms: [],
+          activeRoomId: null,
+          connectionStatus: "disconnected",
+        });
       },
 
       logout: async () => {
         try {
-          // Optional: Call backend logout endpoint to clear session/cookie
-          await axios.post(`${API_URL}/auth/logout`, {}, { withCredentials: true });
-        } catch (error) {
-          console.error("Failed to logout from server:", error);
+          await logoutApi();
+        } catch {
+          // Clear local state even if server logout fails
         } finally {
-          // Clear user state regardless of server response
-          set({ user: null, isAuthenticated: false });
-          // Redirect to login page
-          window.location.href = '/login';
+          clearStoredToken();
+          set({
+            user: null,
+            isAuthenticated: false,
+            rooms: [],
+            activeRoomId: null,
+            connectionStatus: "disconnected",
+          });
+          window.location.href = "/login";
         }
       },
     }),
     {
-      name: 'auth-storage', // name of the item in storage (must be unique)
-      storage: createJSONStorage(() => localStorage), // use localStorage
+      name: "auth-storage",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (state) => ({
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+        activeRoomId: state.activeRoomId,
+      }),
     }
   )
 );

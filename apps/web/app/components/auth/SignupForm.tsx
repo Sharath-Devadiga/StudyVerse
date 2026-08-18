@@ -1,10 +1,8 @@
-// components/auth/SignupForm.tsx
 "use client";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import axios from "axios";
 import { useRouter } from "next/navigation";
 import {
   Card,
@@ -26,9 +24,9 @@ import {
 import { Input } from "../ui/input";
 import { useToast } from "../ui/use-toast";
 import Link from "next/link";
-import { Chrome } from "lucide-react"; // Or any other Google icon
-
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+import { Chrome } from "lucide-react";
+import { signup, getGoogleAuthUrl } from "../../../lib/api/auth";
+import { getApiErrorMessage } from "../../../lib/utils";
 
 const formSchema = z
   .object({
@@ -58,36 +56,26 @@ export function SignupForm() {
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
-      await axios.post(`${API_URL}/auth/signup`, {
-        name: values.name,
-        email: values.email,
-        password: values.password,
-      });
+      await signup(values.name, values.email, values.password);
       toast({
-        title: "Success ✅",
+        title: "Account Created",
         description: "Your account has been created. Please log in.",
       });
       router.push("/login");
-    } catch (error: any) {
-      console.error("Signup failed:", error);
+    } catch (error) {
       toast({
-        title: "Signup Failed ❌",
-        description: error.response?.data?.message || "An unexpected error occurred.",
+        title: "Signup Failed",
+        description: getApiErrorMessage(error, "An unexpected error occurred."),
         variant: "destructive",
       });
     }
   };
 
-  const handleGoogleSignup = () => {
-    // Redirect user to the backend Google OAuth endpoint
-  window.location.href = `${API_URL}/auth/google?action=signup`;
-  };
-
   return (
-    <Card className="w-full max-w-md">
+    <Card className="w-full max-w-md shadow-lg">
       <CardHeader className="text-center">
         <CardTitle>Create an Account</CardTitle>
-        <CardDescription>Join Studyverse and start collaborating.</CardDescription>
+        <CardDescription>Join StudyVerse and start collaborating.</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -95,11 +83,11 @@ export function SignupForm() {
             <FormField
               control={form.control}
               name="name"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Full Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="John Doe" {...field} />
+                    <Input placeholder="John Doe" autoComplete="name" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -108,11 +96,16 @@ export function SignupForm() {
             <FormField
               control={form.control}
               name="email"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input placeholder="you@example.com" {...field} />
+                    <Input
+                      placeholder="you@example.com"
+                      type="email"
+                      autoComplete="email"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -121,11 +114,16 @@ export function SignupForm() {
             <FormField
               control={form.control}
               name="password"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="******" {...field} />
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="******"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -134,37 +132,54 @@ export function SignupForm() {
             <FormField
               control={form.control}
               name="confirmPassword"
-              render={({ field }: any) => (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Confirm Password</FormLabel>
                   <FormControl>
-                    <Input type="password" placeholder="******" {...field} />
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      placeholder="******"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={form.formState.isSubmitting}
+            >
               {form.formState.isSubmitting ? "Signing Up..." : "Sign Up"}
             </Button>
           </form>
         </Form>
         <div className="relative my-4">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
+            <span className="w-full border-t border-gray-200 dark:border-gray-700" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+            <span className="bg-white px-2 text-gray-500 dark:bg-gray-950 dark:text-gray-400">
+              Or continue with
+            </span>
           </div>
         </div>
-        <Button variant="outline" className="w-full" onClick={handleGoogleSignup}>
+        <Button
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            window.location.href = getGoogleAuthUrl("signup");
+          }}
+        >
           <Chrome className="mr-2 h-4 w-4" /> Sign Up with Google
         </Button>
       </CardContent>
       <CardFooter className="justify-center">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           Already have an account?{" "}
-          <Link href="/login" className="font-semibold text-primary hover:underline">
+          <Link href="/login" className="font-semibold text-blue-600 hover:underline">
             Log in
           </Link>
         </p>

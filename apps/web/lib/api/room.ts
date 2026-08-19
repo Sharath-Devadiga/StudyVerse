@@ -45,10 +45,10 @@ export async function getRoomResources(roomId: string): Promise<Resource[]> {
   return data;
 }
 
-export async function uploadResource(roomId: string, channelId: string, file: File): Promise<Resource> {
-  const data = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onerror = () => reject(new Error("Could not read file")); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(file); });
-  const { data: resource } = await apiClient.post<Resource>(`/user/room/${roomId}/resources`, { roomId, channelId, name: file.name, mimeType: file.type, data });
-  return resource;
+export async function uploadResource(roomId: string, channelId: string, file: File): Promise<{ resource: Resource; message: Message }> {
+  const fileData = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onerror = () => reject(new Error("Could not read file")); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(file); });
+  const { data } = await apiClient.post<{ resource: Resource; message: Message }>(`/user/room/${roomId}/resources`, { roomId, channelId, name: file.name, mimeType: file.type, data: fileData });
+  return data;
 }
 
-export async function getRoomSummary(roomId: string): Promise<{ summary: string }> { const { data } = await apiClient.get<{ summary: string }>(`/user/room/${roomId}/summary`); return data; }
+export async function getRoomSummary(roomId: string, channelId: string): Promise<{ summary: string; cached: boolean; updatedAt: string | null }> { const { data } = await apiClient.get<{ summary: string; cached: boolean; updatedAt: string | null }>(`/user/room/${roomId}/summary`, { params: { channelId } }); return data; }

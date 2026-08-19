@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
-import { Bell, BookOpen, LogOut, Search, User as UserIcon } from "lucide-react";
+import { BookOpen, LogOut, Search, User as UserIcon } from "lucide-react";
 import { Avatar } from "./Avatar";
 
 interface AppHeaderProps {
@@ -19,7 +19,7 @@ interface AppHeaderProps {
 export function AppHeader({ search }: AppHeaderProps) {
   const router = useRouter();
   const { user, logout } = useAuthStore();
-  const [openMenu, setOpenMenu] = useState<"user" | "notifications" | null>(null);
+  const [openMenu, setOpenMenu] = useState<"user" | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,28 +62,6 @@ export function AppHeader({ search }: AppHeaderProps) {
         )}
 
         <div ref={containerRef} className="flex shrink-0 items-center gap-1">
-          {/* Notifications */}
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() =>
-                setOpenMenu((m) => (m === "notifications" ? null : "notifications"))
-              }
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-              aria-label="Notifications"
-            >
-              <Bell className="h-5 w-5" />
-            </button>
-            {openMenu === "notifications" && (
-              <div className="absolute right-0 mt-2 w-72 rounded-xl border border-gray-200 bg-white p-4 shadow-lg">
-                <p className="text-sm font-medium text-gray-900">Notifications</p>
-                <div className="mt-3 rounded-lg border border-dashed border-gray-200 bg-gray-50 px-3 py-6 text-center">
-                  <p className="text-sm text-gray-500">You&apos;re all caught up.</p>
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* User menu */}
           <div className="relative">
             <button

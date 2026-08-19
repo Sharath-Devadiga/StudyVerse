@@ -89,6 +89,7 @@ export function joinSocketChannel(roomId: string, channelId: string, onJoined: (
 }
 
 export function leaveSocketChannel(channelId: string): void { socket?.emit("leave-channel", channelId); }
+export function publishResource(resourceId: string): void { socket?.emit("publish-resource", resourceId); }
 
 export function sendChatMessage(roomId: string, channelId: string, message: string): void {
   socket?.emit("room-chat", { room: roomId, channel: channelId, message });

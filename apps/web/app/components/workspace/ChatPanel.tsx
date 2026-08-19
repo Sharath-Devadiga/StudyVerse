@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Loader2, Paperclip, SendHorizonal, WifiOff } from "lucide-react";
+import { AlertCircle, FileText, Loader2, Paperclip, SendHorizonal, WifiOff } from "lucide-react";
 import { Avatar } from "../layout/Avatar";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
 import { formatMessageDate, formatMessageTime } from "../../../lib/utils";
 import type { ConnectionStatus, Message } from "../../../lib/types";
 import { uploadResource } from "../../../lib/api/room";
 import { getApiErrorMessage } from "../../../lib/utils";
+import { publishResource } from "../../../lib/socket";
 
 interface ChatPanelProps {
   messages: Message[];
@@ -21,6 +22,7 @@ interface ChatPanelProps {
   onReloadHistory: () => void;
   roomId: string;
   channelId: string;
+  onResource: (message: Message) => void;
 }
 
 function ConnectionBanner({
@@ -85,6 +87,7 @@ export function ChatPanel({
   onReloadHistory,
   roomId,
   channelId,
+  onResource,
 }: ChatPanelProps) {
   const { user } = useAuthStore();
   const [draft, setDraft] = useState("");
@@ -105,7 +108,7 @@ export function ChatPanel({
   }
 
   const canSend = joined && status === "connected" && !sending;
-  async function upload(file: File) { setUploading(true); setUploadError(null); try { await uploadResource(roomId, channelId, file); } catch (e) { setUploadError(getApiErrorMessage(e, "Upload failed.")); } finally { setUploading(false); } }
+  async function upload(file: File) { setUploading(true); setUploadError(null); try { const uploaded = await uploadResource(roomId, channelId, file); onResource(uploaded.message); publishResource(uploaded.resource.id); } catch (e) { setUploadError(getApiErrorMessage(e, "Upload failed.")); } finally { setUploading(false); } }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -189,9 +192,8 @@ export function ChatPanel({
                           </span>
                         </div>
                       )}
-                      <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700">
-                        {message.content}
-                      </p>
+                      {message.content && <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700">{message.content}</p>}
+                      {message.resource && <AttachmentCard resource={message.resource} />}
                     </div>
                   </div>
                 </li>
@@ -243,4 +245,10 @@ export function ChatPanel({
       </div>
     </div>
   );
+}
+
+function AttachmentCard({ resource }: { resource: NonNullable<Message["resource"]> }) {
+  const image = resource.mimeType?.startsWith("image/"); const size = resource.sizeBytes ? `${(resource.sizeBytes / 1024 / 1024).toFixed(resource.sizeBytes > 1024 * 1024 ? 1 : 2)} MB` : resource.mimeType?.split("/").pop()?.toUpperCase() ?? "FILE";
+  if (image) return <a href={resource.url} target="_blank" rel="noreferrer" className="mt-2 block max-w-sm overflow-hidden rounded-lg border border-slate-200 bg-white"><img src={resource.url} alt={resource.name} className="max-h-64 w-full object-cover" /><div className="flex items-center justify-between p-3 text-xs text-slate-600"><span className="truncate font-medium text-slate-800">{resource.name}</span><span>{size}</span></div></a>;
+  return <a href={resource.url} target="_blank" rel="noreferrer" className="mt-2 flex max-w-sm items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 hover:border-blue-300"><FileText className="h-8 w-8 shrink-0 text-blue-600" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium text-slate-900">{resource.name}</span><span className="block text-xs text-slate-500">{size} · Open or download</span></span></a>;
 }

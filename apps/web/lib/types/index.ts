@@ -56,6 +56,7 @@ export interface Message {
   userId: string;
   roomId: string;
   channelId: string | null;
+  resource?: Resource | null;
   user: {
     id: string;
     name: string;
@@ -67,7 +68,7 @@ export interface Message {
 export interface Channel { id: string; name: string; position: number; roomId: string }
 
 export interface Resource {
-  id: string; name: string; url: string; mimeType: string | null; createdAt: string;
+  id: string; name: string; url: string; mimeType: string | null; sizeBytes?: number | null; createdAt: string;
   channel: { id: string; name: string } | null;
   uploader: { id: string; name: string };
 }

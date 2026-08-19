@@ -312,11 +312,12 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
               onReloadHistory={chat.reloadHistory}
               roomId={roomId}
               channelId={activeChannelId!}
+              onResource={chat.addMessage}
             />
           ) : tab === "files" ? (
             <FilesPanel roomId={roomId} />
           ) : (
-            <AiSummaryPanel roomId={roomId} />
+            activeChannelId ? <AiSummaryPanel roomId={roomId} channelId={activeChannelId} /> : <div className="flex flex-1 items-center justify-center text-sm text-gray-500">Select a channel to summarize its activity.</div>
           )}
         </main>
       </div>

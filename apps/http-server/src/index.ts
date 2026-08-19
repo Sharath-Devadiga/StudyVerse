@@ -10,7 +10,6 @@ import userRouter from "./routes/user";
 import dataRouter from "./routes/data";
 import { prisma } from "@repo/db/prisma";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
-import path from "path";
 
 const app = express();
 
@@ -25,7 +24,6 @@ app.use(
 
 app.use(cookieParser());
 app.use(express.json({ limit: "15mb" }));
-app.use("/uploads", express.static(path.resolve(process.cwd(), "uploads")));
 
 app.get("/health", async (_req, res) => {
   try {

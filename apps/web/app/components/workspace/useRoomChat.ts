@@ -24,6 +24,7 @@ interface UseRoomChat {
   historyError: string | null;
   sending: boolean;
   sendMessage: (text: string) => void;
+  addMessage: (message: Message) => void;
   reloadHistory: () => void;
 }
 
@@ -133,6 +134,7 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
     },
     [roomId, channelId]
   );
+  const addMessage = useCallback((message: Message) => setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]), []);
 
   return {
     messages,
@@ -143,6 +145,7 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
     historyError,
     sending,
     sendMessage,
+    addMessage,
     reloadHistory: loadHistory,
   };
 }

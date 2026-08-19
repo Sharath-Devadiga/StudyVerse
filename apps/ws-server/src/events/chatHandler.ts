@@ -124,6 +124,14 @@ export const registerChatHandlers = (io: Server, socket: Socket) => {
 
   socket.on("join-room", joinRoom);
   socket.on("join-channel", joinChannel);
+  socket.on("publish-resource", async (resourceId: string) => {
+    try {
+      if (typeof resourceId !== "string") throw new Error("Valid resource ID is required");
+      const message = await prisma.message.findFirst({ where: { resourceId, userId: socket.data.user.id }, include: { user: { select: { id: true, name: true, username: true, avatar: true } }, resource: { include: { uploader: { select: { id: true, name: true } }, channel: { select: { id: true, name: true } } } } } });
+      if (!message?.channelId) throw new Error("Resource message not found");
+      io.in(`channel:${message.channelId}`).emit("room-chat", { ...message, createdAt: message.createdAt.toISOString() });
+    } catch (error) { socket.emit("error", { error: error instanceof Error ? error.message : "Failed to publish resource" }); }
+  });
   socket.on("leave-channel", (channelId: string) => { if (typeof channelId === "string") socket.leave(`channel:${channelId}`); });
   socket.on("room-chat", handleMessage);
 };

@@ -42,6 +42,7 @@ export function OnBoardingForm() {
   const [universityId, setUniversityId] = useState<string | null>(null);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
   const [semesterIds, setSemesterIds] = useState<string[]>([]);
+  const [joinedSemesterIds, setJoinedSemesterIds] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -72,7 +73,7 @@ export function OnBoardingForm() {
   }, [isHydrated, user, router, setRooms, addingSemester]);
 
   useEffect(() => {
-    if (addingSemester && user?.universityId && user.departmentId) { setUniversityId(user.universityId); setDepartmentId(user.departmentId); setStepIndex(2); }
+    if (addingSemester && user?.universityId && user.departmentId) { setUniversityId(user.universityId); setDepartmentId(user.departmentId); setStepIndex(2); getUserRooms().then((rooms) => setJoinedSemesterIds(rooms.map((room) => room.semester.id))).catch(() => {}); }
   }, [addingSemester, user]);
 
   // Load universities on mount.
@@ -171,7 +172,7 @@ export function OnBoardingForm() {
       setDepartmentId(id);
       setSemesterIds([]);
       setSemesters([]);
-    } else {
+    } else if (!joinedSemesterIds.includes(id)) {
       setSemesterIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
     }
   }
@@ -293,15 +294,18 @@ export function OnBoardingForm() {
               No {currentStep.label.toLowerCase()} options are available yet.
             </p>
           </div>
+        ) : currentStep.key === "semester" && addingSemester && semesters.length > 0 && semesters.every((semester) => joinedSemesterIds.includes(semester.id)) ? (
+          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-10 text-center"><p className="text-sm text-gray-500">You&apos;re already part of all available semesters.</p><Button type="button" className="mt-4" onClick={() => router.replace("/dashboard")}>Back to dashboard</Button></div>
         ) : currentStep.key === "semester" ? (
           <div className="max-h-72 space-y-2 overflow-y-auto">
             {options.map((opt) => {
-              const isSelected = semesterIds.includes(opt.id);
+              const joined = joinedSemesterIds.includes(opt.id); const isSelected = semesterIds.includes(opt.id);
               return (
                 <button
                   key={opt.id}
                   type="button"
                   onClick={() => selectOption(opt.id)}
+                  disabled={joined}
                   className={`flex items-center justify-between rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
                     isSelected
                       ? "border-blue-600 bg-blue-50 text-blue-900 ring-1 ring-blue-600"
@@ -309,7 +313,7 @@ export function OnBoardingForm() {
                   }`}
                 >
                   <span className="truncate font-medium">{opt.label}</span>
-                  {isSelected && <Check className="h-4 w-4 shrink-0 text-blue-600" />}
+                  {joined ? <span className="text-xs font-medium text-emerald-600">Joined</span> : isSelected && <Check className="h-4 w-4 shrink-0 text-blue-600" />}
                 </button>
               );
             })}
@@ -325,8 +329,8 @@ export function OnBoardingForm() {
             type="button"
             variant="ghost"
             onClick={goBack}
-            disabled={stepIndex === 0 || submitting}
-            className={stepIndex === 0 ? "invisible" : ""}
+            disabled={stepIndex === 0 || addingSemester || submitting}
+            className={stepIndex === 0 || addingSemester ? "invisible" : ""}
           >
             <ChevronLeft className="mr-1 h-4 w-4" />
             Back
@@ -334,7 +338,7 @@ export function OnBoardingForm() {
           <Button
             type="button"
             onClick={goNext}
-            disabled={(!selectedId || (currentStep.key === "semester" && semesterIds.length === 0)) || submitting}
+            disabled={(!selectedId || (currentStep.key === "semester" && semesterIds.length === 0) || (addingSemester && semesters.length > 0 && semesters.every((semester) => joinedSemesterIds.includes(semester.id)))) || submitting}
           >
             {submitting
               ? "Joining..."

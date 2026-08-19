@@ -41,7 +41,7 @@ export const getChannelMessages = async (req: AuthenticatedRequest, res: Respons
     if (!await accessibleRoom(req.user.id, roomId)) return res.status(403).json({ error: "Forbidden: You are not a member of this room" });
     const channel = await prisma.channel.findFirst({ where: { id: channelId, roomId } });
     if (!channel) return res.status(404).json({ error: "Channel not found" });
-    const messages = await prisma.message.findMany({ where: { roomId, channelId }, include: { user: { select: { id: true, name: true, username: true, avatar: true } } }, orderBy: { createdAt: "asc" } });
+    const messages = await prisma.message.findMany({ where: { roomId, channelId }, include: { user: { select: { id: true, name: true, username: true, avatar: true } }, resource: { include: { uploader: { select: { id: true, name: true } }, channel: { select: { id: true, name: true } } } } }, orderBy: { createdAt: "asc" } });
     res.json(messages);
   } catch (error) { next(error); }
 };

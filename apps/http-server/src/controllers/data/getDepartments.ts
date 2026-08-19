@@ -11,6 +11,7 @@ export const getDepartments = async (req: Request, res: Response, next: NextFunc
     const departments = await prisma.department.findMany({
       where: {
         universityId: universityId,
+        isActive: true,
       },
       orderBy: {
         name: 'asc',

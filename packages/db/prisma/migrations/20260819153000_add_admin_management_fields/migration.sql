@@ -1,0 +1,8 @@
+ALTER TABLE "User" ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "University" ADD COLUMN "code" TEXT;
+ALTER TABLE "University" ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Department" ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Semester" ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Channel" ADD COLUMN "description" TEXT;
+ALTER TABLE "Channel" ADD COLUMN "isActive" BOOLEAN NOT NULL DEFAULT true;
+CREATE UNIQUE INDEX "University_code_key" ON "University"("code");

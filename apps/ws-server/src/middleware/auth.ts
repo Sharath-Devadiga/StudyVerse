@@ -47,10 +47,11 @@ export const authMiddleware = async (
         email: true,
         username: true,
         avatar: true,
+        isActive: true,
       },
     });
 
-    if (!user) {
+    if (!user || !user.isActive) {
       return next(new Error("Authentication error: User not found."));
     }
 

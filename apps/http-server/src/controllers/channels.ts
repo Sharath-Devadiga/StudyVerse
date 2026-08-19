@@ -29,7 +29,7 @@ export const getChannels = async (req: AuthenticatedRequest, res: Response, next
     if (!roomId || !isValidUuid(roomId)) return res.status(400).json({ error: "Valid room ID is required" });
     if (!await accessibleRoom(req.user.id, roomId)) return res.status(403).json({ error: "Forbidden: You are not a member of this room" });
     await ensureRoomChannels(roomId);
-    res.json(await prisma.channel.findMany({ where: { roomId }, orderBy: [{ position: "asc" }, { name: "asc" }] }));
+    res.json(await prisma.channel.findMany({ where: { roomId, isActive: true }, orderBy: [{ position: "asc" }, { name: "asc" }] }));
   } catch (error) { next(error); }
 };
 

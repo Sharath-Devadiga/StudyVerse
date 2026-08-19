@@ -11,6 +11,7 @@ export const getSemesters = async (req: Request, res: Response, next: NextFuncti
     const semesters = await prisma.semester.findMany({
       where: {
         departmentId: departmentId,
+        isActive: true,
       },
       orderBy: {
         number: 'asc',

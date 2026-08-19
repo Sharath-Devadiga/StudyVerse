@@ -4,6 +4,7 @@ import { prisma } from "@repo/db/prisma";
 export const getUniversities = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const universities = await prisma.university.findMany({
+      where: { isActive: true },
       orderBy: {
         name: 'asc',
       },

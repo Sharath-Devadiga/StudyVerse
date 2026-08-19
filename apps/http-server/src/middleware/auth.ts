@@ -34,10 +34,10 @@ export const authenticateToken = async (
 
     const user = await prisma.user.findUnique({
       where: { id: decoded.id },
-      select: safeUserSelect,
+      select: { ...safeUserSelect, isActive: true },
     });
 
-    if (!user) {
+    if (!user || !user.isActive) {
       return res.status(401).json({ error: "User not found" });
     }
 

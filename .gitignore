@@ -39,3 +39,5 @@ dist/
 .pnpm-store/
 
 *.tsbuildinfo
+
+apps/http-server/uploads/

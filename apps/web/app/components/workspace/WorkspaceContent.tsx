@@ -20,7 +20,7 @@ import { FilesPanel } from "./FilesPanel";
 import { AiSummaryPanel } from "./AiSummaryPanel";
 import { useRoomChat } from "./useRoomChat";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
-import { getRoom, getRoomChannels, getRoomMembers, getUserRooms } from "../../../lib/api/room";
+import { getRoom, getRoomChannels, getRoomMembers } from "../../../lib/api/room";
 import { getApiErrorMessage } from "../../../lib/utils";
 import type { Channel, Room, RoomMember } from "../../../lib/types";
 
@@ -34,7 +34,7 @@ const TABS: { key: Tab; label: string; icon: typeof MessageSquare }[] = [
 
 export function WorkspaceContent({ roomId }: { roomId: string }) {
   const router = useRouter();
-  const { rooms, setRooms, setActiveRoomId } = useAuthStore();
+  const { setActiveRoomId } = useAuthStore();
 
   const [room, setRoom] = useState<Room | null>(null);
   const [roomLoading, setRoomLoading] = useState(true);
@@ -57,16 +57,6 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
   useEffect(() => {
     setActiveRoomId(roomId);
   }, [roomId, setActiveRoomId]);
-
-  // Ensure the sidebar room list is populated.
-  useEffect(() => {
-    if (rooms.length === 0) {
-      getUserRooms()
-        .then(setRooms)
-        .catch(() => {});
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // Load the room details.
   useEffect(() => {
@@ -175,7 +165,7 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
             type="button"
             onClick={() => setSidebarOpen(true)}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 lg:hidden"
-            aria-label="Open rooms sidebar"
+            aria-label="Open workspace sidebar"
           >
             <Menu className="h-5 w-5" />
           </button>
@@ -233,8 +223,11 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
         {/* Sidebar (desktop) */}
         <aside className="hidden w-64 shrink-0 border-r border-gray-200 bg-white lg:flex lg:flex-col">
           <RoomSidebar
-            rooms={rooms}
-            activeRoomId={roomId}
+            channels={channels}
+            channelsLoading={channelsLoading}
+            channelsError={channelsError}
+            activeChannelId={activeChannelId}
+            onSelectChannel={setActiveChannelId}
             members={members}
             membersLoading={membersLoading}
             membersError={membersError}
@@ -250,7 +243,7 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
             />
             <div className="absolute left-0 top-0 flex h-full w-72 flex-col bg-white shadow-xl">
               <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <span className="text-sm font-semibold text-gray-900">Rooms</span>
+                <span className="text-sm font-semibold text-gray-900">Workspace</span>
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(false)}
@@ -261,8 +254,14 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
                 </button>
               </div>
               <RoomSidebar
-                rooms={rooms}
-                activeRoomId={roomId}
+                channels={channels}
+                channelsLoading={channelsLoading}
+                channelsError={channelsError}
+                activeChannelId={activeChannelId}
+                onSelectChannel={(channelId) => {
+                  setActiveChannelId(channelId);
+                  setSidebarOpen(false);
+                }}
                 members={members}
                 membersLoading={membersLoading}
                 membersError={membersError}
@@ -270,14 +269,6 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
             </div>
           </div>
         )}
-
-        {/* Channel navigation */}
-        <aside className="hidden w-48 shrink-0 border-r border-gray-200 bg-slate-50 xl:block">
-          <div className="px-3 py-4">
-            <h2 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Channels</h2>
-            {channelsLoading ? <Loader2 className="m-2 h-4 w-4 animate-spin text-blue-600" /> : channelsError ? <p className="px-2 text-xs text-red-600">{channelsError}</p> : channels.length === 0 ? <p className="px-2 text-xs text-gray-500">No channels created yet.</p> : <nav className="space-y-1">{channels.map((channel) => <button key={channel.id} type="button" onClick={() => setActiveChannelId(channel.id)} className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm ${channel.id === activeChannelId ? "bg-blue-50 font-medium text-blue-700" : "text-gray-600 hover:bg-gray-100"}`}><span className="text-gray-400">#</span>{channel.name}</button>)}</nav>}
-          </div>
-        </aside>
 
         {/* Main content */}
         <main className="flex min-w-0 flex-1 flex-col bg-white">
@@ -301,6 +292,7 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
             <div className="flex flex-1 items-center justify-center text-sm text-gray-500">{channelsLoading ? "Loading channels..." : "No study channels have been created yet."}</div>
           ) : tab === "chats" ? (
             <ChatPanel
+              key={activeChannelId}
               messages={chat.messages}
               status={chat.status}
               joined={chat.joined}
@@ -315,9 +307,9 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
               onResource={chat.addMessage}
             />
           ) : tab === "files" ? (
-            <FilesPanel roomId={roomId} />
+            activeChannelId ? <FilesPanel key={activeChannelId} roomId={roomId} channelId={activeChannelId} /> : <div className="flex flex-1 items-center justify-center text-sm text-gray-500">Select a channel to view its files.</div>
           ) : (
-            activeChannelId ? <AiSummaryPanel roomId={roomId} channelId={activeChannelId} /> : <div className="flex flex-1 items-center justify-center text-sm text-gray-500">Select a channel to summarize its activity.</div>
+            activeChannelId ? <AiSummaryPanel key={activeChannelId} roomId={roomId} channelId={activeChannelId} /> : <div className="flex flex-1 items-center justify-center text-sm text-gray-500">Select a channel to summarize its activity.</div>
           )}
         </main>
       </div>

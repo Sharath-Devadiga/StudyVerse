@@ -30,7 +30,9 @@ interface UseRoomChat {
 
 export function useRoomChat(roomId: string | null, channelId: string | null): UseRoomChat {
   const { user, setConnectionStatus } = useAuthStore();
+  const scopeKey = roomId && channelId ? `${roomId}:${channelId}` : null;
   const [messages, setMessages] = useState<Message[]>([]);
+  const [messagesScopeKey, setMessagesScopeKey] = useState<string | null>(scopeKey);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [joined, setJoined] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
@@ -40,28 +42,39 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
 
   const roomIdRef = useRef(roomId);
   roomIdRef.current = roomId;
+  const historyRequestRef = useRef(0);
 
   const loadHistory = useCallback(async () => {
     if (!roomId || !channelId) return;
+    const requestId = historyRequestRef.current + 1;
+    historyRequestRef.current = requestId;
     setHistoryLoading(true);
     setHistoryError(null);
     try {
       const data = await getChannelMessages(roomId, channelId);
-      setMessages(data);
+      if (historyRequestRef.current === requestId) {
+        setMessages(data);
+        setMessagesScopeKey(scopeKey);
+      }
     } catch (err) {
-      setHistoryError(getApiErrorMessage(err, "Failed to load message history."));
+      if (historyRequestRef.current === requestId) {
+        setHistoryError(getApiErrorMessage(err, "Failed to load message history."));
+      }
     } finally {
-      setHistoryLoading(false);
+      if (historyRequestRef.current === requestId) {
+        setHistoryLoading(false);
+      }
     }
-  }, [roomId, channelId]);
+  }, [roomId, channelId, scopeKey]);
 
   // Load persisted history over HTTP whenever the room changes.
   useEffect(() => {
     setMessages([]);
+    setMessagesScopeKey(scopeKey);
     setJoined(false);
     setJoinError(null);
     loadHistory();
-  }, [loadHistory]);
+  }, [loadHistory, scopeKey]);
 
   // Manage the Socket.IO connection and room membership.
   useEffect(() => {
@@ -107,6 +120,7 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
+      setMessagesScopeKey(scopeKey);
       if (user && msg.userId === user.id) setSending(false);
     });
 
@@ -121,7 +135,7 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
       socket.off("connect", attemptJoin);
       socket.io.off("reconnect", attemptJoin);
     };
-  }, [roomId, channelId, setConnectionStatus, user]);
+  }, [roomId, channelId, scopeKey, setConnectionStatus, user]);
 
   const sendMessage = useCallback(
     (text: string) => {
@@ -134,10 +148,15 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
     },
     [roomId, channelId]
   );
-  const addMessage = useCallback((message: Message) => setMessages((previous) => previous.some((item) => item.id === message.id) ? previous : [...previous, message]), []);
+  const addMessage = useCallback((message: Message) => {
+    setMessages((previous) =>
+      previous.some((item) => item.id === message.id) ? previous : [...previous, message]
+    );
+    setMessagesScopeKey(scopeKey);
+  }, [scopeKey]);
 
   return {
-    messages,
+    messages: messagesScopeKey === scopeKey ? messages : [],
     status,
     joined,
     joinError,

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { AlertCircle, FileText, Loader2, Paperclip, SendHorizonal, WifiOff } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, FileText, Loader2, Paperclip, SendHorizonal, WifiOff, X } from "lucide-react";
 import { Avatar } from "../layout/Avatar";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
 import { formatMessageDate, formatMessageTime } from "../../../lib/utils";
@@ -9,9 +9,10 @@ import type { ConnectionStatus, Message } from "../../../lib/types";
 import { uploadResource } from "../../../lib/api/room";
 import { getApiErrorMessage } from "../../../lib/utils";
 import { publishResource } from "../../../lib/socket";
+import type { ChatDisplayMessage } from "./useRoomChat";
 
 interface ChatPanelProps {
-  messages: Message[];
+  messages: ChatDisplayMessage[];
   status: ConnectionStatus;
   joined: boolean;
   joinError: string | null;
@@ -19,6 +20,7 @@ interface ChatPanelProps {
   historyError: string | null;
   sending: boolean;
   onSend: (text: string) => void;
+  onRetryMessage: (messageId: string) => void;
   onReloadHistory: () => void;
   roomId: string;
   channelId: string;
@@ -84,6 +86,7 @@ export function ChatPanel({
   historyError,
   sending,
   onSend,
+  onRetryMessage,
   onReloadHistory,
   roomId,
   channelId,
@@ -91,24 +94,88 @@ export function ChatPanel({
 }: ChatPanelProps) {
   const { user } = useAuthStore();
   const [draft, setDraft] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length, historyLoading]);
 
+  const selectedFileSize = useMemo(() => {
+    if (!selectedFile) return null;
+    const mb = selectedFile.size / 1024 / 1024;
+    return `${mb >= 1 ? mb.toFixed(1) : mb.toFixed(2)} MB`;
+  }, [selectedFile]);
+
+  useEffect(() => {
+    return () => {
+      if (selectedFilePreviewUrl) URL.revokeObjectURL(selectedFilePreviewUrl);
+    };
+  }, [selectedFilePreviewUrl]);
+
+  useEffect(() => {
+    setDraft("");
+    setUploadError(null);
+    setUploading(false);
+    if (selectedFilePreviewUrl) URL.revokeObjectURL(selectedFilePreviewUrl);
+    setSelectedFile(null);
+    setSelectedFilePreviewUrl(null);
+  }, [channelId]);
+
+  function setComposerFile(file: File | null) {
+    setUploadError(null);
+    if (selectedFilePreviewUrl) {
+      URL.revokeObjectURL(selectedFilePreviewUrl);
+      setSelectedFilePreviewUrl(null);
+    }
+    setSelectedFile(file);
+    if (file && file.type.startsWith("image/")) {
+      setSelectedFilePreviewUrl(URL.createObjectURL(file));
+    }
+  }
+
   function submit() {
     const text = draft.trim();
-    if (!text || !joined) return;
+    if (!joined || uploading || sending) return;
+    if (!text && !selectedFile) return;
+
+    if (selectedFile) {
+      void uploadSelectedAttachment(text);
+      return;
+    }
+
     onSend(text);
     setDraft("");
   }
 
-  const canSend = joined && status === "connected" && !sending;
-  async function upload(file: File) { setUploading(true); setUploadError(null); try { const uploaded = await uploadResource(roomId, channelId, file); onResource(uploaded.message); publishResource(uploaded.resource.id); } catch (e) { setUploadError(getApiErrorMessage(e, "Upload failed.")); } finally { setUploading(false); } }
+  const canSend = joined && status === "connected" && !sending && !uploading;
+  async function uploadSelectedAttachment(textToSendAfterUpload: string) {
+    if (!selectedFile) return;
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const uploaded = await uploadResource(roomId, channelId, selectedFile);
+      onResource(uploaded.message);
+      publishResource(uploaded.resource.id);
+
+      if (textToSendAfterUpload) {
+        onSend(textToSendAfterUpload);
+      }
+
+      setDraft("");
+      setComposerFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (e) {
+      setUploadError(getApiErrorMessage(e, "Upload failed. You can retry sending this file."));
+    } finally {
+      setUploading(false);
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -190,6 +257,18 @@ export function ChatPanel({
                           <span className="text-xs text-gray-400">
                             {formatMessageTime(message.createdAt)}
                           </span>
+                          {message.optimisticState === "sending" && (
+                            <span className="text-xs text-blue-500">Sending...</span>
+                          )}
+                          {message.optimisticState === "failed" && (
+                            <button
+                              type="button"
+                              onClick={() => onRetryMessage(message.id)}
+                              className="text-xs font-medium text-red-600 hover:text-red-700"
+                            >
+                              Retry
+                            </button>
+                          )}
                         </div>
                       )}
                       {message.content && <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700">{message.content}</p>}
@@ -207,8 +286,58 @@ export function ChatPanel({
       {/* Composer */}
       <div className="border-t border-gray-200 bg-white px-4 py-3">
         {uploadError && <p className="mx-auto mb-2 max-w-3xl text-xs text-red-600">{uploadError}</p>}
+        {selectedFile && (
+          <div className="mx-auto mb-3 max-w-3xl rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                {selectedFilePreviewUrl ? (
+                  <img
+                    src={selectedFilePreviewUrl}
+                    alt={selectedFile.name}
+                    className="mb-2 max-h-32 rounded-md border border-slate-200 object-cover"
+                  />
+                ) : (
+                  <div className="mb-2 flex items-center gap-2 text-sm text-slate-700">
+                    <FileText className="h-4 w-4 text-blue-600" />
+                    <span className="truncate">{selectedFile.name}</span>
+                  </div>
+                )}
+                <p className="truncate text-sm font-medium text-slate-800">{selectedFile.name}</p>
+                <p className="text-xs text-slate-500">
+                  {selectedFile.type || "File"}
+                  {selectedFileSize ? ` · ${selectedFileSize}` : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setComposerFile(null);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+                className="rounded-md p-1 text-slate-500 hover:bg-slate-200 hover:text-slate-700"
+                aria-label="Remove selected attachment"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        )}
         <div className="mx-auto flex max-w-3xl items-end gap-2">
-          <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><input className="sr-only" type="file" accept=".pdf,.txt,.docx,image/jpeg,image/png,image/webp" disabled={!joined || uploading} onChange={(e) => { const file = e.target.files?.[0]; if (file) upload(file); e.currentTarget.value = ""; }} />{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}</label>
+          <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">
+            <input
+              ref={fileInputRef}
+              className="sr-only"
+              type="file"
+              accept=".pdf,.txt,.docx,image/jpeg,image/png,image/webp"
+              disabled={!joined || uploading || sending}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setComposerFile(file);
+              }}
+            />
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          </label>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -224,18 +353,18 @@ export function ChatPanel({
               }
             }}
             rows={1}
-            placeholder={joined ? "Write a message..." : "Joining room..."}
-            disabled={!joined}
+            placeholder={selectedFile ? "Add an optional caption..." : joined ? "Write a message..." : "Joining room..."}
+            disabled={!joined || uploading}
             className="max-h-32 min-h-[2.5rem] flex-1 resize-none rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
           />
           <button
             type="button"
             onClick={submit}
-            disabled={!canSend || draft.trim().length === 0}
+            disabled={!canSend || (draft.trim().length === 0 && !selectedFile)}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             aria-label="Send message"
           >
-            {sending ? (
+            {sending || uploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <SendHorizonal className="h-4 w-4" />

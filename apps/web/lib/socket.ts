@@ -5,6 +5,8 @@ import { getStoredToken } from "./utils";
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:8080";
 
 let socket: Socket | null = null;
+let statusSubscriber: ((status: ConnectionStatus) => void) | null = null;
+let errorSubscriber: ((message: string) => void) | null = null;
 
 export function getSocket(): Socket | null {
   return socket;
@@ -14,14 +16,16 @@ export function connectSocket(
   onStatusChange: (status: ConnectionStatus) => void,
   onError: (message: string) => void
 ): Socket {
-  if (socket?.connected) {
-    return socket;
-  }
+  statusSubscriber = onStatusChange;
+  errorSubscriber = onError;
 
   if (socket) {
-    socket.removeAllListeners();
-    socket.disconnect();
-    socket = null;
+    if (socket.connected) {
+      onStatusChange("connected");
+    } else {
+      onStatusChange("connecting");
+    }
+    return socket;
   }
 
   onStatusChange("connecting");
@@ -37,14 +41,14 @@ export function connectSocket(
     reconnectionDelay: 1000,
   });
 
-  socket.on("connect", () => onStatusChange("connected"));
-  socket.on("disconnect", () => onStatusChange("disconnected"));
+  socket.on("connect", () => statusSubscriber?.("connected"));
+  socket.on("disconnect", () => statusSubscriber?.("disconnected"));
   socket.on("connect_error", (err) => {
-    onStatusChange("error");
-    onError(err.message || "Connection failed");
+    statusSubscriber?.("error");
+    errorSubscriber?.(err.message || "Connection failed");
   });
-  socket.io.on("reconnect", () => onStatusChange("connected"));
-  socket.io.on("reconnect_failed", () => onStatusChange("error"));
+  socket.io.on("reconnect", () => statusSubscriber?.("connected"));
+  socket.io.on("reconnect_failed", () => statusSubscriber?.("error"));
 
   return socket;
 }
@@ -55,6 +59,8 @@ export function disconnectSocket(): void {
     socket.disconnect();
     socket = null;
   }
+  statusSubscriber = null;
+  errorSubscriber = null;
 }
 
 export function joinSocketRoom(

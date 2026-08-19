@@ -6,7 +6,7 @@ import { Providers } from "./providers";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "StudyVerse — Collaborative academic workspace",
+  title: "StudyVerse",
   description:
     "StudyVerse connects students by university, department, and semester to share knowledge and study together in real time.",
 };

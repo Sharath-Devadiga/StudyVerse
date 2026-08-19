@@ -14,21 +14,39 @@ import { getUserProfile, resetWorkspace, updateUserProfile, uploadAvatar } from 
 import { getApiErrorMessage } from "../../../lib/utils";
 import type { User } from "../../../lib/types";
 
+async function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read the selected file."));
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ProfileContent() {
   const router = useRouter();
-  const { setUser } = useAuthStore();
+  const { user: authUser, setUser } = useAuthStore();
   const { toast } = useToast();
 
-  const [profile, setProfile] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<User | null>(authUser);
+  const [loading, setLoading] = useState(!authUser);
   const [error, setError] = useState<string | null>(null);
 
-  const [username, setUsername] = useState("");
-  const [avatar, setAvatar] = useState("");
+  const [username, setUsername] = useState(authUser?.username ?? "");
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(null);
+  const [selectedAvatarPreviewUrl, setSelectedAvatarPreviewUrl] = useState<string | null>(null);
   const [changingWorkspace, setChangingWorkspace] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (authUser) {
+      setProfile(authUser);
+      setUsername(authUser.username ?? "");
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -38,7 +56,6 @@ export function ProfileContent() {
         setProfile(data);
         setUser(data);
         setUsername(data.username ?? "");
-        setAvatar(data.avatar ?? "");
       })
       .catch((err) => {
         if (!cancelled) setError(getApiErrorMessage(err, "Failed to load your profile."));
@@ -49,15 +66,37 @@ export function ProfileContent() {
     return () => {
       cancelled = true;
     };
-  }, [setUser]);
+  }, [authUser, setUser]);
+
+  useEffect(() => {
+    return () => {
+      if (selectedAvatarPreviewUrl) {
+        URL.revokeObjectURL(selectedAvatarPreviewUrl);
+      }
+    };
+  }, [selectedAvatarPreviewUrl]);
+
+  function updateSelectedAvatar(file: File | null) {
+    if (selectedAvatarPreviewUrl) {
+      URL.revokeObjectURL(selectedAvatarPreviewUrl);
+      setSelectedAvatarPreviewUrl(null);
+    }
+
+    setSelectedAvatarFile(file);
+    if (file) {
+      setSelectedAvatarPreviewUrl(URL.createObjectURL(file));
+    }
+  }
 
   const dirty =
     profile !== null &&
-    (username.trim() !== (profile.username ?? "") ||
-      avatar.trim() !== (profile.avatar ?? ""));
+    (username.trim() !== (profile.username ?? "") || !!selectedAvatarFile);
+
+  const avatarSrc = selectedAvatarPreviewUrl ?? profile?.avatar ?? "";
 
   async function save() {
     if (!profile) return;
+    if (saving) return;
     setSaving(true);
     try {
       const updates: { username?: string; avatar?: string | null } = {};
@@ -66,11 +105,15 @@ export function ProfileContent() {
       }
       let updated = profile;
       if (Object.keys(updates).length) updated = await updateUserProfile(updates);
-      if (avatar.startsWith("data:")) updated = await uploadAvatar(avatar, avatar.slice(5, avatar.indexOf(";")));
+      if (selectedAvatarFile) {
+        const dataUri = await fileToDataUrl(selectedAvatarFile);
+        updated = await uploadAvatar(dataUri, selectedAvatarFile.type || "image/jpeg");
+      }
+
       setProfile(updated);
       setUser(updated);
       setUsername(updated.username ?? "");
-      setAvatar(updated.avatar ?? "");
+      updateSelectedAvatar(null);
       toast({ title: "Profile updated", description: "Your changes have been saved." });
     } catch (err) {
       toast({
@@ -108,7 +151,14 @@ export function ProfileContent() {
           <div className="space-y-6">
             {/* Identity header */}
             <section className="flex items-center gap-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-              <Avatar name={profile.name} src={avatar || profile.avatar} size={72} />
+              <div className="relative">
+                <Avatar name={profile.name} src={avatarSrc} size={72} />
+                {selectedAvatarFile && (
+                  <span className="absolute -bottom-1 -right-1 rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                    Pending
+                  </span>
+                )}
+              </div>
               <div className="min-w-0">
                 <h1 className="truncate text-xl font-semibold text-gray-900">
                   {profile.name}
@@ -178,7 +228,42 @@ export function ProfileContent() {
                     autoComplete="username"
                   />
                 </div>
-                <div><p className="mb-1.5 text-sm font-medium text-gray-700">Profile picture</p><label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><Upload className="h-4 w-4" />Upload / Change photo<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 2_000_000) { toast({ title: "Image too large", description: "Choose an image under 2 MB.", variant: "destructive" }); return; } const reader = new FileReader(); reader.onload = () => setAvatar(String(reader.result)); reader.readAsDataURL(file); }} /></label><p className="mt-1 text-xs text-gray-400">PNG, JPEG, or WebP under 2 MB.</p></div>
+                <div>
+                  <p className="mb-1.5 text-sm font-medium text-gray-700">Profile picture</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                      <Upload className="h-4 w-4" />
+                      {selectedAvatarFile ? "Replace photo" : "Upload / Change photo"}
+                      <input
+                        className="sr-only"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 2_000_000) {
+                            toast({ title: "Image too large", description: "Choose an image under 2 MB.", variant: "destructive" });
+                            return;
+                          }
+                          updateSelectedAvatar(file);
+                        }}
+                      />
+                    </label>
+                    {selectedAvatarFile && (
+                      <button
+                        type="button"
+                        onClick={() => updateSelectedAvatar(null)}
+                        className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 hover:bg-gray-50"
+                      >
+                        Cancel selection
+                      </button>
+                    )}
+                  </div>
+                  {selectedAvatarFile && (
+                    <p className="mt-1 text-xs text-blue-600">New image selected. It will upload when you save changes.</p>
+                  )}
+                  <p className="mt-1 text-xs text-gray-400">PNG, JPEG, or WebP under 2 MB.</p>
+                </div>
                 <div className="flex justify-end">
                   <Button type="button" onClick={save} disabled={!dirty || saving}>
                     {saving ? "Saving..." : "Save changes"}

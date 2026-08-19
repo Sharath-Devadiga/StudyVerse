@@ -1,7 +1,7 @@
 "use client";
 
 import { Hash, Loader2, Users } from "lucide-react";
-import type { Channel, RoomMember } from "../../../lib/types";
+import type { Channel } from "../../../lib/types";
 
 interface RoomSidebarProps {
   channels: Channel[];
@@ -9,9 +9,8 @@ interface RoomSidebarProps {
   channelsError: string | null;
   activeChannelId: string | null;
   onSelectChannel: (channelId: string) => void;
-  members: RoomMember[];
-  membersLoading: boolean;
-  membersError: string | null;
+  memberCount: number | null;
+  memberCountLoading: boolean;
 }
 
 export function RoomSidebar({
@@ -20,9 +19,8 @@ export function RoomSidebar({
   channelsError,
   activeChannelId,
   onSelectChannel,
-  members,
-  membersLoading,
-  membersError,
+  memberCount,
+  memberCountLoading,
 }: RoomSidebarProps) {
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -68,16 +66,14 @@ export function RoomSidebar({
           Members
         </div>
 
-        {membersLoading ? (
+        {memberCountLoading ? (
           <div className="flex items-center gap-2 px-2 py-1.5 text-sm text-gray-400">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading...
           </div>
-        ) : membersError ? (
-          <p className="px-2 py-1.5 text-sm text-red-600">{membersError}</p>
         ) : (
           <p className="px-2 py-1.5 text-sm text-gray-500">
-            {members.length} {members.length === 1 ? "member" : "members"}
+            {memberCount ?? 0} {(memberCount ?? 0) === 1 ? "member" : "members"}
           </p>
         )}
       </div>

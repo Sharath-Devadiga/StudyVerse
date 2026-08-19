@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "./store/AuthStore/useAuthStore";
 import { isOnboardingComplete } from "../lib/utils";
+import { LandingPlaceholder } from "./components/landing/LandingPlaceholder";
 
 export default function RootPage() {
   const router = useRouter();
@@ -12,10 +13,7 @@ export default function RootPage() {
   useEffect(() => {
     if (!isHydrated) return;
 
-    if (!isAuthenticated || !user) {
-      router.replace("/login");
-      return;
-    }
+    if (!isAuthenticated || !user) return;
 
     if (isOnboardingComplete(user) && rooms.length > 0) {
       router.replace("/dashboard");
@@ -23,6 +21,10 @@ export default function RootPage() {
       router.replace("/onBoarding");
     }
   }, [isHydrated, isAuthenticated, user, rooms, router]);
+
+  if (isHydrated && (!isAuthenticated || !user)) {
+    return <LandingPlaceholder />;
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">

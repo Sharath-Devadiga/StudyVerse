@@ -28,7 +28,7 @@ apiClient.interceptors.response.use(
       !isRedirecting
     ) {
       const path = window.location.pathname;
-      const publicPaths = ["/login", "/signup", "/success"];
+      const publicPaths = ["/", "/login", "/signup", "/success"];
       if (!publicPaths.some((p) => path.startsWith(p))) {
         isRedirecting = true;
         clearStoredToken();

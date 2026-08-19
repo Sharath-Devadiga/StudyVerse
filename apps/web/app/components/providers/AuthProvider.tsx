@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
 import { getUserProfile } from "../../../lib/api/user";
 import { getUserRooms } from "../../../lib/api/room";
-import { isOnboardingComplete } from "../../../lib/utils";
+import { getStoredToken, isOnboardingComplete } from "../../../lib/utils";
 
 interface AuthProviderProps {
   children: React.ReactNode;
@@ -20,6 +20,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     initialized.current = true;
 
     async function hydrate() {
+      const token = getStoredToken();
+      if (!token) {
+        setUser(null);
+        setRooms([]);
+        setHydrated(true);
+        return;
+      }
+
       try {
         const user = await getUserProfile();
         setUser(user);

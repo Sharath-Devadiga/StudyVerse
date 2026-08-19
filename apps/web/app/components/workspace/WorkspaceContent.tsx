@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -20,9 +20,12 @@ import { FilesPanel } from "./FilesPanel";
 import { AiSummaryPanel } from "./AiSummaryPanel";
 import { useRoomChat } from "./useRoomChat";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
-import { getRoom, getRoomChannels, getRoomMembers } from "../../../lib/api/room";
+import { getRoom, getRoomChannels } from "../../../lib/api/room";
 import { getApiErrorMessage } from "../../../lib/utils";
-import type { Channel, Room, RoomMember } from "../../../lib/types";
+import type { Channel, Room } from "../../../lib/types";
+
+const roomCache = new Map<string, Room>();
+const roomChannelsCache = new Map<string, Channel[]>();
 
 type Tab = "chats" | "files" | "ai";
 
@@ -34,16 +37,12 @@ const TABS: { key: Tab; label: string; icon: typeof MessageSquare }[] = [
 
 export function WorkspaceContent({ roomId }: { roomId: string }) {
   const router = useRouter();
-  const { setActiveRoomId } = useAuthStore();
+  const { rooms, setActiveRoomId } = useAuthStore();
 
   const [room, setRoom] = useState<Room | null>(null);
   const [roomLoading, setRoomLoading] = useState(true);
   const [roomError, setRoomError] = useState<string | null>(null);
   const [forbidden, setForbidden] = useState(false);
-
-  const [members, setMembers] = useState<RoomMember[]>([]);
-  const [membersLoading, setMembersLoading] = useState(true);
-  const [membersError, setMembersError] = useState<string | null>(null);
   const [channels, setChannels] = useState<Channel[]>([]);
   const [channelsLoading, setChannelsLoading] = useState(true);
   const [channelsError, setChannelsError] = useState<string | null>(null);
@@ -51,75 +50,85 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
 
   const [tab, setTab] = useState<Tab>("chats");
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const loadRequestRef = useRef(0);
+  const lastChannelByRoomRef = useRef<Record<string, string>>({});
 
   const chat = useRoomChat(forbidden ? null : roomId, activeChannelId);
+
+  function selectChannel(channelId: string) {
+    lastChannelByRoomRef.current[roomId] = channelId;
+    setActiveChannelId(channelId);
+  }
 
   useEffect(() => {
     setActiveRoomId(roomId);
   }, [roomId, setActiveRoomId]);
 
-  // Load the room details.
+  // Load room details and channels with stale-safe cache-first behavior.
   useEffect(() => {
-    let cancelled = false;
-    setRoomLoading(true);
+    const requestId = loadRequestRef.current + 1;
+    loadRequestRef.current = requestId;
+
+    const cachedRoom = roomCache.get(roomId) ?? rooms.find((candidate) => candidate.id === roomId) ?? null;
+    const cachedChannels = roomChannelsCache.get(roomId) ?? null;
+
+    setRoom(cachedRoom);
+    setRoomLoading(!cachedRoom);
     setRoomError(null);
     setForbidden(false);
-    getRoom(roomId)
-      .then((data) => {
-        if (!cancelled) setRoom(data);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        const status = (err as { response?: { status?: number } })?.response?.status;
-        if (status === 403) {
-          setForbidden(true);
-        } else {
-          setRoomError(getApiErrorMessage(err, "Failed to load this study room."));
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setRoomLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [roomId]);
 
-  // Load room members.
-  useEffect(() => {
-    if (forbidden) return;
-    let cancelled = false;
-    setMembersLoading(true);
-    setMembersError(null);
-    getRoomMembers(roomId)
-      .then((data) => {
-        if (!cancelled) setMembers(data);
-      })
-      .catch((err) => {
-        if (!cancelled)
-          setMembersError(getApiErrorMessage(err, "Failed to load members."));
-      })
-      .finally(() => {
-        if (!cancelled) setMembersLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [roomId, forbidden]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setChannelsLoading(true);
+    setChannels(cachedChannels ?? []);
+    setChannelsLoading(!cachedChannels);
     setChannelsError(null);
-    setActiveChannelId(null);
-    getRoomChannels(roomId)
-      .then((data) => {
-        if (!cancelled) { setChannels(data); setActiveChannelId(data[0]?.id ?? null); }
-      })
-      .catch((err) => !cancelled && setChannelsError(getApiErrorMessage(err, "Failed to load channels.")))
-      .finally(() => !cancelled && setChannelsLoading(false));
-    return () => { cancelled = true; };
-  }, [roomId]);
+    const preferredCachedChannelId = lastChannelByRoomRef.current[roomId];
+    setActiveChannelId(
+      cachedChannels?.find((channel) => channel.id === preferredCachedChannelId)?.id ??
+        cachedChannels?.[0]?.id ??
+        null
+    );
+
+    const shouldFetchRoom = !cachedRoom;
+    const shouldFetchChannels = !cachedChannels;
+    if (!shouldFetchRoom && !shouldFetchChannels) return;
+
+    const roomPromise = shouldFetchRoom ? getRoom(roomId) : Promise.resolve(cachedRoom as Room);
+    const channelsPromise = shouldFetchChannels ? getRoomChannels(roomId) : Promise.resolve(cachedChannels as Channel[]);
+
+    Promise.allSettled([roomPromise, channelsPromise]).then(([roomResult, channelsResult]) => {
+      if (loadRequestRef.current !== requestId) return;
+
+      const roomStatus = roomResult.status === "rejected" ? (roomResult.reason as { response?: { status?: number } })?.response?.status : undefined;
+      const channelsStatus = channelsResult.status === "rejected" ? (channelsResult.reason as { response?: { status?: number } })?.response?.status : undefined;
+      if (roomStatus === 403 || channelsStatus === 403) {
+        setForbidden(true);
+        setRoomLoading(false);
+        setChannelsLoading(false);
+        return;
+      }
+
+      if (roomResult.status === "fulfilled") {
+        roomCache.set(roomId, roomResult.value);
+        setRoom(roomResult.value);
+      } else if (shouldFetchRoom) {
+        setRoomError(getApiErrorMessage(roomResult.reason, "Failed to load this study room."));
+      }
+      setRoomLoading(false);
+
+      if (channelsResult.status === "fulfilled") {
+        roomChannelsCache.set(roomId, channelsResult.value);
+        setChannels(channelsResult.value);
+        const preferredChannelId = lastChannelByRoomRef.current[roomId];
+        setActiveChannelId(
+          channelsResult.value.find((channel) => channel.id === preferredChannelId)?.id ??
+            channelsResult.value[0]?.id ??
+            null
+        );
+      } else if (shouldFetchChannels) {
+        setChannelsError(getApiErrorMessage(channelsResult.reason, "Failed to load channels."));
+      }
+      setChannelsLoading(false);
+    });
+  }, [roomId, rooms]);
 
   if (forbidden) {
     return (
@@ -227,10 +236,9 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
             channelsLoading={channelsLoading}
             channelsError={channelsError}
             activeChannelId={activeChannelId}
-            onSelectChannel={setActiveChannelId}
-            members={members}
-            membersLoading={membersLoading}
-            membersError={membersError}
+            onSelectChannel={selectChannel}
+            memberCount={room?.memberCount ?? null}
+            memberCountLoading={roomLoading}
           />
         </aside>
 
@@ -259,12 +267,11 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
                 channelsError={channelsError}
                 activeChannelId={activeChannelId}
                 onSelectChannel={(channelId) => {
-                  setActiveChannelId(channelId);
+                  selectChannel(channelId);
                   setSidebarOpen(false);
                 }}
-                members={members}
-                membersLoading={membersLoading}
-                membersError={membersError}
+                memberCount={room?.memberCount ?? null}
+                memberCountLoading={roomLoading}
               />
             </div>
           </div>
@@ -301,6 +308,7 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
               historyError={chat.historyError}
               sending={chat.sending}
               onSend={chat.sendMessage}
+              onRetryMessage={chat.retryMessage}
               onReloadHistory={chat.reloadHistory}
               roomId={roomId}
               channelId={activeChannelId!}

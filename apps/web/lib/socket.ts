@@ -79,8 +79,17 @@ export function joinSocketRoom(
   socket.emit("join-room", roomId);
 }
 
-export function sendChatMessage(roomId: string, message: string): void {
-  socket?.emit("room-chat", { room: roomId, message });
+export function joinSocketChannel(roomId: string, channelId: string, onJoined: () => void, onError: (message: string) => void): void {
+  if (!socket) return;
+  const joined = (payload: { roomId: string; channelId: string }) => { if (payload.channelId === channelId) { socket?.off("error", failed); onJoined(); } };
+  const failed = (payload: { error: string }) => { socket?.off("joined-channel", joined); onError(payload.error); };
+  socket.once("joined-channel", joined);
+  socket.once("error", failed);
+  socket.emit("join-channel", { room: roomId, channel: channelId });
+}
+
+export function sendChatMessage(roomId: string, channelId: string, message: string): void {
+  socket?.emit("room-chat", { room: roomId, channel: channelId, message });
 }
 
 export function onChatMessage(handler: (message: Message) => void): () => void {

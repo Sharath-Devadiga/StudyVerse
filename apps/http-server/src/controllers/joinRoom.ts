@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { prisma } from "@repo/db/prisma";
 import { isValidUuid } from "../utils/validation";
+import { ensureRoomChannels } from "./channels";
 
 interface AuthenticatedRequest extends Request {
   user?: { id: string };
@@ -139,6 +140,8 @@ export const joinRoom = async (
         include: roomDetailInclude,
       });
     }
+
+    await ensureRoomChannels(room.id);
 
     res.status(200).json(formatRoomResponse(room));
   } catch (error) {

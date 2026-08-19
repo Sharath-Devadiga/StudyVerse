@@ -20,6 +20,7 @@ model User {
   createdAt    DateTime     @default(now()) 
   rooms        Room[]        @relation("RoomMembers")
   messages      Message[]
+  resources     Resource[]
   departmentId  String?      
   department    Department?  @relation(fields: [departmentId], references: [id])
   universityId String?
@@ -69,6 +70,22 @@ model Room {
 
   members  User[]  @relation("RoomMembers")
   messages  Message[]
+  channels  Channel[]
+  resources Resource[]
+}
+
+model Channel {
+  id        String    @id @default(uuid())
+  name      String
+  position  Int       @default(0)
+  roomId    String
+  room      Room      @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  messages  Message[]
+  resources Resource[]
+  createdAt DateTime  @default(now())
+
+  @@unique([roomId, name])
+  @@index([roomId, position])
 }
 
 model Message{
@@ -79,4 +96,24 @@ model Message{
   userId    String
   room   Room   @relation(fields: [roomId],references: [id])
   roomId  String
+  channelId String?
+  channel Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  @@index([channelId, createdAt])
+}
+
+model Resource {
+  id          String   @id @default(uuid())
+  name        String
+  url         String
+  mimeType    String?
+  createdAt   DateTime @default(now())
+  uploaderId  String
+  uploader    User     @relation(fields: [uploaderId], references: [id])
+  roomId      String
+  room        Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  channelId   String?
+  channel     Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  @@index([roomId, channelId, createdAt])
 }

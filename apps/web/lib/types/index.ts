@@ -55,12 +55,21 @@ export interface Message {
   createdAt: string;
   userId: string;
   roomId: string;
+  channelId: string | null;
   user: {
     id: string;
     name: string;
     username: string | null;
     avatar: string | null;
   };
+}
+
+export interface Channel { id: string; name: string; position: number; roomId: string }
+
+export interface Resource {
+  id: string; name: string; url: string; mimeType: string | null; createdAt: string;
+  channel: { id: string; name: string } | null;
+  uploader: { id: string; name: string };
 }
 
 export interface ApiError {

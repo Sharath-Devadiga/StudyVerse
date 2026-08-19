@@ -1,4 +1,4 @@
-import type { User, Room, ConnectionStatus } from "../../lib/types";
+import type { User, Room, ConnectionStatus } from "../../../lib/types";
 
 export interface AuthState {
   user: User | null;

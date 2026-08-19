@@ -136,7 +136,7 @@ export function OnBoardingForm() {
     };
   }, [departmentId]);
 
-  const currentStep = STEPS[stepIndex];
+  const currentStep = STEPS[stepIndex]!;
 
   const options = useMemo(() => {
     if (currentStep.key === "university")

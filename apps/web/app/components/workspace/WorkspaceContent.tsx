@@ -20,9 +20,9 @@ import { FilesPanel } from "./FilesPanel";
 import { AiSummaryPanel } from "./AiSummaryPanel";
 import { useRoomChat } from "./useRoomChat";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
-import { getRoom, getRoomMembers, getUserRooms } from "../../../lib/api/room";
+import { getRoom, getRoomChannels, getRoomMembers, getUserRooms } from "../../../lib/api/room";
 import { getApiErrorMessage } from "../../../lib/utils";
-import type { Room, RoomMember } from "../../../lib/types";
+import type { Channel, Room, RoomMember } from "../../../lib/types";
 
 type Tab = "chats" | "files" | "ai";
 
@@ -44,11 +44,15 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(true);
   const [membersError, setMembersError] = useState<string | null>(null);
+  const [channels, setChannels] = useState<Channel[]>([]);
+  const [channelsLoading, setChannelsLoading] = useState(true);
+  const [channelsError, setChannelsError] = useState<string | null>(null);
+  const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
 
   const [tab, setTab] = useState<Tab>("chats");
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const chat = useRoomChat(forbidden ? null : roomId);
+  const chat = useRoomChat(forbidden ? null : roomId, activeChannelId);
 
   useEffect(() => {
     setActiveRoomId(roomId);
@@ -112,6 +116,20 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
       cancelled = true;
     };
   }, [roomId, forbidden]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setChannelsLoading(true);
+    setChannelsError(null);
+    setActiveChannelId(null);
+    getRoomChannels(roomId)
+      .then((data) => {
+        if (!cancelled) { setChannels(data); setActiveChannelId(data[0]?.id ?? null); }
+      })
+      .catch((err) => !cancelled && setChannelsError(getApiErrorMessage(err, "Failed to load channels.")))
+      .finally(() => !cancelled && setChannelsLoading(false));
+    return () => { cancelled = true; };
+  }, [roomId]);
 
   if (forbidden) {
     return (
@@ -253,6 +271,14 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
           </div>
         )}
 
+        {/* Channel navigation */}
+        <aside className="hidden w-48 shrink-0 border-r border-gray-200 bg-slate-50 xl:block">
+          <div className="px-3 py-4">
+            <h2 className="mb-2 px-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Channels</h2>
+            {channelsLoading ? <Loader2 className="m-2 h-4 w-4 animate-spin text-blue-600" /> : channelsError ? <p className="px-2 text-xs text-red-600">{channelsError}</p> : channels.length === 0 ? <p className="px-2 text-xs text-gray-500">No channels created yet.</p> : <nav className="space-y-1">{channels.map((channel) => <button key={channel.id} type="button" onClick={() => setActiveChannelId(channel.id)} className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm ${channel.id === activeChannelId ? "bg-blue-50 font-medium text-blue-700" : "text-gray-600 hover:bg-gray-100"}`}><span className="text-gray-400">#</span>{channel.name}</button>)}</nav>}
+          </div>
+        </aside>
+
         {/* Main content */}
         <main className="flex min-w-0 flex-1 flex-col bg-white">
           {roomError ? (
@@ -271,6 +297,8 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
             <div className="flex flex-1 items-center justify-center">
               <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
             </div>
+          ) : tab === "chats" && !activeChannelId ? (
+            <div className="flex flex-1 items-center justify-center text-sm text-gray-500">{channelsLoading ? "Loading channels..." : "No study channels have been created yet."}</div>
           ) : tab === "chats" ? (
             <ChatPanel
               messages={chat.messages}
@@ -284,7 +312,7 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
               onReloadHistory={chat.reloadHistory}
             />
           ) : tab === "files" ? (
-            <FilesPanel />
+            <FilesPanel roomId={roomId} />
           ) : (
             <AiSummaryPanel />
           )}

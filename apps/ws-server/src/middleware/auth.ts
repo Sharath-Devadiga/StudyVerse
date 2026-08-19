@@ -1,6 +1,6 @@
 import { Socket } from "socket.io";
 import jwt from "jsonwebtoken";
-import cookie from "cookie";
+import {parse} from "cookie";
 import { prisma } from "@repo/db/prisma";
 
 function extractToken(socket: Socket): string | undefined {
@@ -11,7 +11,7 @@ function extractToken(socket: Socket): string | undefined {
 
   const cookieHeader = socket.handshake.headers.cookie;
   if (cookieHeader) {
-    const parsed = cookie.parse(cookieHeader);
+    const parsed = parse(cookieHeader);
     if (parsed.token) {
       return parsed.token;
     }

@@ -4,11 +4,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   connectSocket,
   joinSocketRoom,
+  joinSocketChannel,
   onChatMessage,
   onSocketError,
   sendChatMessage,
 } from "../../../lib/socket";
-import { getRoomMessages } from "../../../lib/api/room";
+import { getChannelMessages } from "../../../lib/api/room";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
 import { getApiErrorMessage } from "../../../lib/utils";
 import type { ConnectionStatus, Message } from "../../../lib/types";
@@ -25,7 +26,7 @@ interface UseRoomChat {
   reloadHistory: () => void;
 }
 
-export function useRoomChat(roomId: string | null): UseRoomChat {
+export function useRoomChat(roomId: string | null, channelId: string | null): UseRoomChat {
   const { user, setConnectionStatus } = useAuthStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
@@ -39,18 +40,18 @@ export function useRoomChat(roomId: string | null): UseRoomChat {
   roomIdRef.current = roomId;
 
   const loadHistory = useCallback(async () => {
-    if (!roomId) return;
+    if (!roomId || !channelId) return;
     setHistoryLoading(true);
     setHistoryError(null);
     try {
-      const data = await getRoomMessages(roomId);
+      const data = await getChannelMessages(roomId, channelId);
       setMessages(data);
     } catch (err) {
       setHistoryError(getApiErrorMessage(err, "Failed to load message history."));
     } finally {
       setHistoryLoading(false);
     }
-  }, [roomId]);
+  }, [roomId, channelId]);
 
   // Load persisted history over HTTP whenever the room changes.
   useEffect(() => {
@@ -62,7 +63,7 @@ export function useRoomChat(roomId: string | null): UseRoomChat {
 
   // Manage the Socket.IO connection and room membership.
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId || !channelId) return;
 
     const updateStatus = (s: ConnectionStatus) => {
       setStatus(s);
@@ -75,18 +76,18 @@ export function useRoomChat(roomId: string | null): UseRoomChat {
 
     const attemptJoin = () => {
       setJoinError(null);
-      joinSocketRoom(
-        roomId,
-        () => {
+      joinSocketRoom(roomId, () => {
+        joinSocketChannel(roomId, channelId, () => {
           if (roomIdRef.current === roomId) setJoined(true);
-        },
-        (message) => {
+        }, (message) => {
           if (roomIdRef.current === roomId) {
             setJoined(false);
             setJoinError(message);
           }
-        }
-      );
+        });
+      }, (message) => {
+        if (roomIdRef.current === roomId) { setJoined(false); setJoinError(message); }
+      });
     };
 
     if (socket.connected) {
@@ -99,7 +100,7 @@ export function useRoomChat(roomId: string | null): UseRoomChat {
 
     // Only accept messages addressed to the room currently in view.
     const offMessage = onChatMessage((msg) => {
-      if (msg.roomId !== roomIdRef.current) return;
+      if (msg.roomId !== roomIdRef.current || msg.channelId !== channelId) return;
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
@@ -117,18 +118,18 @@ export function useRoomChat(roomId: string | null): UseRoomChat {
       socket.off("connect", attemptJoin);
       socket.io.off("reconnect", attemptJoin);
     };
-  }, [roomId, setConnectionStatus, user]);
+  }, [roomId, channelId, setConnectionStatus, user]);
 
   const sendMessage = useCallback(
     (text: string) => {
       const trimmed = text.trim();
-      if (!roomId || trimmed.length === 0) return;
+      if (!roomId || !channelId || trimmed.length === 0) return;
       setSending(true);
-      sendChatMessage(roomId, trimmed);
+      sendChatMessage(roomId, channelId, trimmed);
       // Safety net so the composer never stays locked if no echo arrives.
       setTimeout(() => setSending(false), 5000);
     },
-    [roomId]
+    [roomId, channelId]
   );
 
   return {

@@ -1,19 +1,29 @@
 "use client";
 
-import { FolderOpen } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FolderOpen, Loader2 } from "lucide-react";
+import { getRoomResources } from "../../../lib/api/room";
+import { getApiErrorMessage } from "../../../lib/utils";
+import type { Resource } from "../../../lib/types";
 
-export function FilesPanel() {
+export function FilesPanel({ roomId }: { roomId: string }) {
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { let cancelled = false; setLoading(true); getRoomResources(roomId).then((data) => !cancelled && setResources(data)).catch((err) => !cancelled && setError(getApiErrorMessage(err, "Failed to load study materials."))).finally(() => !cancelled && setLoading(false)); return () => { cancelled = true; }; }, [roomId]);
+  if (loading) return <div className="flex h-full items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-blue-600" /></div>;
+  if (error) return <div className="flex h-full items-center justify-center px-6 text-center text-sm text-red-700">{error}</div>;
+  if (resources.length) return <div className="h-full overflow-y-auto p-5"><h2 className="mb-4 text-base font-semibold text-gray-900">Study materials</h2><ul className="space-y-2">{resources.map((resource) => <li key={resource.id}><a className="block rounded-lg border border-gray-200 bg-white p-3 hover:border-blue-300" href={resource.url} target="_blank" rel="noreferrer"><p className="text-sm font-medium text-gray-900">{resource.name}</p><p className="mt-1 text-xs text-gray-500">Shared by {resource.uploader.name}{resource.channel ? ` · #${resource.channel.name}` : ""}</p></a></li>)}</ul></div>;
   return (
     <div className="flex h-full flex-col items-center justify-center px-6 text-center">
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-100 text-gray-400">
         <FolderOpen className="h-7 w-7" />
       </span>
       <h3 className="mt-4 text-base font-semibold text-gray-900">
-        Files aren&apos;t available yet
+        No study materials yet
       </h3>
       <p className="mt-1 max-w-sm text-sm text-gray-500">
-        File sharing and resources for study rooms aren&apos;t supported by the
-        StudyVerse backend yet. Check back once uploads are enabled.
+        No resources have been shared in this study room yet.
       </p>
     </div>
   );

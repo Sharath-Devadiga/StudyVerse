@@ -3,6 +3,7 @@ import { prisma } from "@repo/db/prisma";
 
 interface ChatMessagePayload {
   room: string;
+  channel: string;
   message: string;
 }
 
@@ -40,12 +41,25 @@ export const registerChatHandlers = (io: Server, socket: Socket) => {
     }
   };
 
+  const joinChannel = async (data: { room: string; channel: string }) => {
+    try {
+      if (!data?.room || !data?.channel) throw new Error("Valid room and channel IDs are required");
+      const room = await prisma.room.findFirst({ where: { id: data.room, members: { some: { id: socket.data.user.id } } } });
+      const channel = room && await prisma.channel.findFirst({ where: { id: data.channel, roomId: room.id } });
+      if (!channel) throw new Error("Forbidden: You cannot access this channel");
+      socket.join(`channel:${channel.id}`);
+      socket.emit("joined-channel", { roomId: room.id, channelId: channel.id });
+    } catch (error) {
+      socket.emit("error", { error: error instanceof Error ? error.message : "Failed to join channel" });
+    }
+  };
+
   const handleMessage = async (data: ChatMessagePayload) => {
     try {
       const sender = socket.data.user;
 
-      if (!data?.room || !data?.message || !sender) {
-        socket.emit("error", { error: "Room and message are required" });
+      if (!data?.room || !data?.channel || !data?.message || !sender) {
+        socket.emit("error", { error: "Room, channel, and message are required" });
         return;
       }
 
@@ -69,11 +83,18 @@ export const registerChatHandlers = (io: Server, socket: Socket) => {
         return;
       }
 
+      const channel = await prisma.channel.findFirst({ where: { id: data.channel, roomId: room.id } });
+      if (!channel) {
+        socket.emit("error", { error: "Channel not found" });
+        return;
+      }
+
       const persistedMessage = await prisma.message.create({
         data: {
           content,
           userId: sender.id,
           roomId: data.room,
+          channelId: channel.id,
         },
         include: {
           user: {
@@ -87,12 +108,13 @@ export const registerChatHandlers = (io: Server, socket: Socket) => {
         },
       });
 
-      io.in(data.room).emit("room-chat", {
+      io.in(`channel:${channel.id}`).emit("room-chat", {
         id: persistedMessage.id,
         content: persistedMessage.content,
         createdAt: persistedMessage.createdAt.toISOString(),
         userId: persistedMessage.userId,
         roomId: persistedMessage.roomId,
+        channelId: persistedMessage.channelId,
         user: persistedMessage.user,
       });
     } catch {
@@ -101,5 +123,6 @@ export const registerChatHandlers = (io: Server, socket: Socket) => {
   };
 
   socket.on("join-room", joinRoom);
+  socket.on("join-channel", joinChannel);
   socket.on("room-chat", handleMessage);
 };

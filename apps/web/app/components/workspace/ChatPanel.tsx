@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Loader2, SendHorizonal, WifiOff } from "lucide-react";
+import { AlertCircle, Loader2, Paperclip, SendHorizonal, WifiOff } from "lucide-react";
 import { Avatar } from "../layout/Avatar";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
 import { formatMessageDate, formatMessageTime } from "../../../lib/utils";
 import type { ConnectionStatus, Message } from "../../../lib/types";
+import { uploadResource } from "../../../lib/api/room";
+import { getApiErrorMessage } from "../../../lib/utils";
 
 interface ChatPanelProps {
   messages: Message[];
@@ -17,6 +19,8 @@ interface ChatPanelProps {
   sending: boolean;
   onSend: (text: string) => void;
   onReloadHistory: () => void;
+  roomId: string;
+  channelId: string;
 }
 
 function ConnectionBanner({
@@ -79,9 +83,13 @@ export function ChatPanel({
   sending,
   onSend,
   onReloadHistory,
+  roomId,
+  channelId,
 }: ChatPanelProps) {
   const { user } = useAuthStore();
   const [draft, setDraft] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
@@ -97,6 +105,7 @@ export function ChatPanel({
   }
 
   const canSend = joined && status === "connected" && !sending;
+  async function upload(file: File) { setUploading(true); setUploadError(null); try { await uploadResource(roomId, channelId, file); } catch (e) { setUploadError(getApiErrorMessage(e, "Upload failed.")); } finally { setUploading(false); } }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -195,7 +204,9 @@ export function ChatPanel({
 
       {/* Composer */}
       <div className="border-t border-gray-200 bg-white px-4 py-3">
+        {uploadError && <p className="mx-auto mb-2 max-w-3xl text-xs text-red-600">{uploadError}</p>}
         <div className="mx-auto flex max-w-3xl items-end gap-2">
+          <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><input className="sr-only" type="file" accept=".pdf,.txt,.docx,image/jpeg,image/png,image/webp" disabled={!joined || uploading} onChange={(e) => { const file = e.target.files?.[0]; if (file) upload(file); e.currentTarget.value = ""; }} />{uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}</label>
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}

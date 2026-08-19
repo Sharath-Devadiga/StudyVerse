@@ -88,6 +88,8 @@ export function joinSocketChannel(roomId: string, channelId: string, onJoined: (
   socket.emit("join-channel", { room: roomId, channel: channelId });
 }
 
+export function leaveSocketChannel(channelId: string): void { socket?.emit("leave-channel", channelId); }
+
 export function sendChatMessage(roomId: string, channelId: string, message: string): void {
   socket?.emit("room-chat", { room: roomId, channel: channelId, message });
 }

@@ -66,9 +66,10 @@ export function DashboardContent() {
             <p className="mt-1 text-sm text-gray-500">
               Jump back into your study rooms or join a new one.
             </p>
+            {user?.university && user?.department && <p className="mt-2 text-sm font-medium text-slate-700">{user.university.name} <span className="text-slate-400">·</span> {user.department.name}</p>}
           </div>
           <Link
-            href="/onBoarding"
+            href="/onBoarding?add=1"
             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
           >
             <Plus className="h-4 w-4" />
@@ -124,7 +125,7 @@ export function DashboardContent() {
                 classmates in real time.
               </p>
               <Link
-                href="/onBoarding"
+                href="/onBoarding?add=1"
                 className="mt-5 inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700"
               >
                 <Plus className="h-4 w-4" />

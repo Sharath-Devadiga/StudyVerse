@@ -5,6 +5,7 @@ import { getMessages } from "../controllers/getMessage";
 import { getUserProfile, updateUserProfile } from "../controllers/profile";
 import { getUserRooms, getRoom, getRoomMembers } from "../controllers/rooms";
 import { getChannelMessages, getChannels, getResources } from "../controllers/channels";
+import { resetWorkspace, roomSummary, uploadAvatar, uploadResource } from "../controllers/studentFeatures";
 
 const userRouter: ReturnType<typeof Router> = Router();
 
@@ -18,6 +19,10 @@ userRouter.get("/room/:roomId/messages", getMessages);
 userRouter.get("/room/:roomId/channels", getChannels);
 userRouter.get("/room/:roomId/channels/:channelId/messages", getChannelMessages);
 userRouter.get("/room/:roomId/resources", getResources);
+userRouter.post("/room/:roomId/resources", uploadResource);
+userRouter.post("/me/avatar", uploadAvatar);
+userRouter.get("/room/:roomId/summary", roomSummary);
+userRouter.post("/workspace/reset", resetWorkspace);
 userRouter.get("/me", getUserProfile);
 userRouter.patch("/me", updateUserProfile);
 

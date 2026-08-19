@@ -5,6 +5,7 @@ import {
   connectSocket,
   joinSocketRoom,
   joinSocketChannel,
+  leaveSocketChannel,
   onChatMessage,
   onSocketError,
   sendChatMessage,
@@ -113,6 +114,7 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
     });
 
     return () => {
+      leaveSocketChannel(channelId);
       offMessage();
       offError();
       socket.off("connect", attemptJoin);

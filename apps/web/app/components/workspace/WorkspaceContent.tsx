@@ -310,11 +310,13 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
               sending={chat.sending}
               onSend={chat.sendMessage}
               onReloadHistory={chat.reloadHistory}
+              roomId={roomId}
+              channelId={activeChannelId!}
             />
           ) : tab === "files" ? (
             <FilesPanel roomId={roomId} />
           ) : (
-            <AiSummaryPanel />
+            <AiSummaryPanel roomId={roomId} />
           )}
         </main>
       </div>

@@ -2,18 +2,20 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Building2, GraduationCap, Loader2, Mail } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Building2, GraduationCap, Loader2, Mail, Upload } from "lucide-react";
 import { AppHeader } from "../layout/AppHeader";
 import { Avatar } from "../layout/Avatar";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { useToast } from "../ui/use-toast";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
-import { getUserProfile, updateUserProfile } from "../../../lib/api/user";
+import { getUserProfile, resetWorkspace, updateUserProfile, uploadAvatar } from "../../../lib/api/user";
 import { getApiErrorMessage } from "../../../lib/utils";
 import type { User } from "../../../lib/types";
 
 export function ProfileContent() {
+  const router = useRouter();
   const { setUser } = useAuthStore();
   const { toast } = useToast();
 
@@ -23,6 +25,7 @@ export function ProfileContent() {
 
   const [username, setUsername] = useState("");
   const [avatar, setAvatar] = useState("");
+  const [changingWorkspace, setChangingWorkspace] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -61,10 +64,9 @@ export function ProfileContent() {
       if (username.trim() !== (profile.username ?? "")) {
         updates.username = username.trim();
       }
-      if (avatar.trim() !== (profile.avatar ?? "")) {
-        updates.avatar = avatar.trim() === "" ? null : avatar.trim();
-      }
-      const updated = await updateUserProfile(updates);
+      let updated = profile;
+      if (Object.keys(updates).length) updated = await updateUserProfile(updates);
+      if (avatar.startsWith("data:")) updated = await uploadAvatar(avatar, avatar.slice(5, avatar.indexOf(";")));
       setProfile(updated);
       setUser(updated);
       setUsername(updated.username ?? "");
@@ -152,13 +154,7 @@ export function ProfileContent() {
                   </div>
                 </div>
               </div>
-              <p className="mt-4 text-xs text-gray-400">
-                To change your university or department,{" "}
-                <Link href="/onBoarding" className="text-blue-600 hover:underline">
-                  update your workspace setup
-                </Link>
-                .
-              </p>
+              <button type="button" onClick={() => setChangingWorkspace(true)} className="mt-4 text-xs text-blue-600 hover:underline">Update your workspace setup</button>
             </section>
 
             {/* Editable fields */}
@@ -182,24 +178,7 @@ export function ProfileContent() {
                     autoComplete="username"
                   />
                 </div>
-                <div>
-                  <label
-                    htmlFor="avatar"
-                    className="mb-1.5 block text-sm font-medium text-gray-700"
-                  >
-                    Avatar URL
-                  </label>
-                  <Input
-                    id="avatar"
-                    value={avatar}
-                    onChange={(e) => setAvatar(e.target.value)}
-                    placeholder="https://example.com/avatar.jpg"
-                    type="url"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">
-                    Leave blank to use your initials.
-                  </p>
-                </div>
+                <div><p className="mb-1.5 text-sm font-medium text-gray-700">Profile picture</p><label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><Upload className="h-4 w-4" />Upload / Change photo<input className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => { const file = event.target.files?.[0]; if (!file) return; if (file.size > 2_000_000) { toast({ title: "Image too large", description: "Choose an image under 2 MB.", variant: "destructive" }); return; } const reader = new FileReader(); reader.onload = () => setAvatar(String(reader.result)); reader.readAsDataURL(file); }} /></label><p className="mt-1 text-xs text-gray-400">PNG, JPEG, or WebP under 2 MB.</p></div>
                 <div className="flex justify-end">
                   <Button type="button" onClick={save} disabled={!dirty || saving}>
                     {saving ? "Saving..." : "Save changes"}
@@ -207,6 +186,7 @@ export function ProfileContent() {
                 </div>
               </div>
             </section>
+            {changingWorkspace && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"><div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl"><h2 className="text-lg font-semibold">Change your academic workspace?</h2><p className="mt-2 text-sm text-gray-600">Your current semester memberships will be removed and you will lose access to those study rooms. Your account and profile will remain.</p><div className="mt-6 flex justify-end gap-3"><Button variant="outline" onClick={() => setChangingWorkspace(false)}>Cancel</Button><Button onClick={async () => { try { await resetWorkspace(); setUser(null); router.push("/onBoarding"); } catch (err) { toast({ title: "Could not change workspace", description: getApiErrorMessage(err, "Please try again."), variant: "destructive" }); } }}>Continue</Button></div></div></div>}
           </div>
         ) : null}
       </main>

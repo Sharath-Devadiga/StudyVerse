@@ -28,7 +28,7 @@ export function RoomSidebar({
             Study Rooms
           </h2>
           <Link
-            href="/onBoarding"
+            href="/onBoarding?add=1"
             className="text-gray-400 hover:text-blue-600"
             aria-label="Join another study room"
             title="Join another study room"

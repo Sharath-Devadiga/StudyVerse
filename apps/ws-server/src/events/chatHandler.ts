@@ -124,5 +124,6 @@ export const registerChatHandlers = (io: Server, socket: Socket) => {
 
   socket.on("join-room", joinRoom);
   socket.on("join-channel", joinChannel);
+  socket.on("leave-channel", (channelId: string) => { if (typeof channelId === "string") socket.leave(`channel:${channelId}`); });
   socket.on("room-chat", handleMessage);
 };

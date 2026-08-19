@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { BookOpen, Check, ChevronLeft, GraduationCap, Layers, School } from "lucide-react";
 import { Button } from "../ui/button";
+import { Select } from "../ui/select";
 import { useToast } from "../ui/use-toast";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
 import {
@@ -27,6 +28,8 @@ const STEPS: { key: StepKey; label: string; icon: typeof School }[] = [
 
 export function OnBoardingForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const addingSemester = searchParams.get("add") === "1";
   const { toast } = useToast();
   const { user, isHydrated, isAuthenticated, setUser, setRooms } = useAuthStore();
 
@@ -38,7 +41,7 @@ export function OnBoardingForm() {
 
   const [universityId, setUniversityId] = useState<string | null>(null);
   const [departmentId, setDepartmentId] = useState<string | null>(null);
-  const [semesterId, setSemesterId] = useState<string | null>(null);
+  const [semesterIds, setSemesterIds] = useState<string[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
@@ -55,7 +58,7 @@ export function OnBoardingForm() {
 
   useEffect(() => {
     if (!isHydrated || !user) return;
-    if (isOnboardingComplete(user)) {
+    if (isOnboardingComplete(user) && !addingSemester) {
       (async () => {
         try {
           const rooms = await getUserRooms();
@@ -66,7 +69,11 @@ export function OnBoardingForm() {
         }
       })();
     }
-  }, [isHydrated, user, router, setRooms]);
+  }, [isHydrated, user, router, setRooms, addingSemester]);
+
+  useEffect(() => {
+    if (addingSemester && user?.universityId && user.departmentId) { setUniversityId(user.universityId); setDepartmentId(user.departmentId); setStepIndex(2); }
+  }, [addingSemester, user]);
 
   // Load universities on mount.
   useEffect(() => {
@@ -151,21 +158,21 @@ export function OnBoardingForm() {
       ? universityId
       : currentStep.key === "department"
         ? departmentId
-        : semesterId;
+        : semesterIds[0] ?? null;
 
   function selectOption(id: string) {
     if (currentStep.key === "university") {
       setUniversityId(id);
       setDepartmentId(null);
-      setSemesterId(null);
+      setSemesterIds([]);
       setDepartments([]);
       setSemesters([]);
     } else if (currentStep.key === "department") {
       setDepartmentId(id);
-      setSemesterId(null);
+      setSemesterIds([]);
       setSemesters([]);
     } else {
-      setSemesterId(id);
+      setSemesterIds((current) => current.includes(id) ? current.filter((value) => value !== id) : [...current, id]);
     }
   }
 
@@ -185,14 +192,13 @@ export function OnBoardingForm() {
   }
 
   async function finish() {
-    if (!universityId || !departmentId || !semesterId) return;
+    if (!universityId || !departmentId || semesterIds.length === 0) return;
     setSubmitting(true);
     try {
       // Persist the user's academic selection, then join the semester room.
-      const updated = await updateUserProfile({ universityId, departmentId });
-      setUser(updated);
+      if (!addingSemester) { const updated = await updateUserProfile({ universityId, departmentId }); setUser(updated); }
 
-      await joinRoom(semesterId);
+      await Promise.all(semesterIds.map((semesterId) => joinRoom(semesterId)));
 
       const rooms = await getUserRooms();
       setRooms(rooms);
@@ -231,7 +237,7 @@ export function OnBoardingForm() {
           Set up your workspace
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          Tell us where you study so we can connect you to the right study room.
+          {addingSemester ? "Choose another semester in your current academic workspace." : "Tell us where you study so we can connect you to the right study room."}
         </p>
       </div>
 
@@ -287,10 +293,10 @@ export function OnBoardingForm() {
               No {currentStep.label.toLowerCase()} options are available yet.
             </p>
           </div>
-        ) : (
-          <div className="grid max-h-72 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+        ) : currentStep.key === "semester" ? (
+          <div className="max-h-72 space-y-2 overflow-y-auto">
             {options.map((opt) => {
-              const isSelected = selectedId === opt.id;
+              const isSelected = semesterIds.includes(opt.id);
               return (
                 <button
                   key={opt.id}
@@ -308,6 +314,10 @@ export function OnBoardingForm() {
               );
             })}
           </div>
+        ) : (
+          <Select value={selectedId ?? ""} onChange={(event) => selectOption(event.target.value)} placeholder={`Select your ${currentStep.label.toLowerCase()}`}>
+            {options.map((opt) => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+          </Select>
         )}
 
         <div className="mt-6 flex items-center justify-between">
@@ -324,7 +334,7 @@ export function OnBoardingForm() {
           <Button
             type="button"
             onClick={goNext}
-            disabled={!selectedId || submitting}
+            disabled={(!selectedId || (currentStep.key === "semester" && semesterIds.length === 0)) || submitting}
           >
             {submitting
               ? "Joining..."

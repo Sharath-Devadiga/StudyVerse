@@ -41,3 +41,8 @@ dist/
 *.tsbuildinfo
 
 apps/http-server/uploads/
+
+# Local database seed/fix scripts
+packages/db/seed.ts
+packages/db/seed-demo.ts
+packages/db/fix-university-name.ts

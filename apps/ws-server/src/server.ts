@@ -10,7 +10,7 @@ const httpServer = createServer(app);
 
 initSocketServer(httpServer);
 
-const port = process.env.PORT || 8080;
+const port = process.env.WS_PORT || process.env.PORT || 8080;
 
 app.get('/', (req, res) => {
   res.send('WebSocket server is running');

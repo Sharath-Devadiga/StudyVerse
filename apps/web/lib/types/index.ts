@@ -7,6 +7,7 @@ export interface User {
   departmentId?: string | null;
   universityId?: string | null;
   createdAt: string;
+  editedAt?: string | null;
   department?: {
     id: string;
     name: string;

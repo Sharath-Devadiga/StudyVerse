@@ -7,7 +7,11 @@ import {
   joinSocketChannel,
   leaveSocketChannel,
   onChatMessage,
+  onMessageDeleted,
+  onMessageEdited,
   onSocketError,
+  deleteChatMessage,
+  editChatMessage,
   sendChatMessage,
 } from "../../../lib/socket";
 import { getChannelMessages } from "../../../lib/api/room";
@@ -31,6 +35,8 @@ interface UseRoomChat {
   sending: boolean;
   sendMessage: (text: string) => void;
   retryMessage: (messageId: string) => void;
+  editMessage: (messageId: string, content: string, onError?: (message: string) => void) => void;
+  deleteMessage: (messageId: string, onError?: (message: string) => void) => void;
   addMessage: (message: Message) => void;
   reloadHistory: () => void;
 }
@@ -171,6 +177,28 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
       if (user && msg.userId === user.id) setSending(false);
     });
 
+    const offEdited = onMessageEdited((event) => {
+      if (event.roomId !== roomIdRef.current || event.channelId !== channelId) return;
+      setMessages((previous) => {
+        const next = previous.map((message) =>
+          message.id === event.id
+            ? { ...message, content: event.content, editedAt: event.editedAt }
+            : message
+        );
+        channelHistoryCache.set(scopeKey ?? "", next.filter((item) => !item.optimisticState));
+        return next;
+      });
+    });
+
+    const offDeleted = onMessageDeleted((event) => {
+      if (event.roomId !== roomIdRef.current || event.channelId !== channelId) return;
+      setMessages((previous) => {
+        const next = previous.filter((message) => message.id !== event.id);
+        channelHistoryCache.set(scopeKey ?? "", next.filter((item) => !item.optimisticState));
+        return next;
+      });
+    });
+
     const offError = onSocketError(() => {
       setMessages((previous) => {
         const failedIndex = previous.findIndex((item) => item.optimisticState === "sending");
@@ -195,6 +223,8 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
       pendingByTempIdRef.current.clear();
       leaveSocketChannel(channelId);
       offMessage();
+      offEdited();
+      offDeleted();
       offError();
       socket.off("connect", attemptJoin);
       socket.io.off("reconnect", attemptJoin);
@@ -277,6 +307,24 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
     pendingByTempIdRef.current.set(messageId, { content: textToRetry, timeoutId });
   }, [channelId, roomId]);
 
+  const editMessage = useCallback(
+    (messageId: string, content: string, onError?: (message: string) => void) => {
+      editChatMessage(messageId, content, (ok, error) => {
+        if (!ok) onError?.(error ?? "Failed to edit message");
+      });
+    },
+    []
+  );
+
+  const deleteMessage = useCallback(
+    (messageId: string, onError?: (message: string) => void) => {
+      deleteChatMessage(messageId, (ok, error) => {
+        if (!ok) onError?.(error ?? "Failed to delete message");
+      });
+    },
+    []
+  );
+
   const addMessage = useCallback((message: Message) => {
     const cacheKey = message.channelId ? `${message.roomId}:${message.channelId}` : null;
     setMessages((previous) => {
@@ -300,6 +348,8 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
     sending,
     sendMessage,
     retryMessage,
+    editMessage,
+    deleteMessage,
     addMessage,
     reloadHistory: () => void loadHistory(true),
   };

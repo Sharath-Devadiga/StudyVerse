@@ -11,11 +11,15 @@ export const metadata: Metadata = {
     "StudyVerse connects students by university, department, and semester to share knowledge and study together in real time.",
 };
 
+
+
 export const viewport: Viewport = {
   themeColor: "#2563eb",
   width: "device-width",
   initialScale: 1,
 };
+
+
 
 export default function RootLayout({
   children,

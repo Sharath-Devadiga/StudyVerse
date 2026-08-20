@@ -5,6 +5,7 @@ import { getStoredToken } from "./utils";
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:8080";
 
 let socket: Socket | null = null;
+let socketToken: string | null = null;
 let statusSubscriber: ((status: ConnectionStatus) => void) | null = null;
 let errorSubscriber: ((message: string) => void) | null = null;
 
@@ -19,6 +20,16 @@ export function connectSocket(
   statusSubscriber = onStatusChange;
   errorSubscriber = onError;
 
+  const token = getStoredToken();
+
+  // Recreate the singleton when authentication changes or a previous attempt
+  // failed before the user had a valid token.
+  if (socket && socketToken !== token) {
+    socket.removeAllListeners();
+    socket.disconnect();
+    socket = null;
+  }
+
   if (socket) {
     if (socket.connected) {
       onStatusChange("connected");
@@ -29,8 +40,7 @@ export function connectSocket(
   }
 
   onStatusChange("connecting");
-
-  const token = getStoredToken();
+  socketToken = token;
 
   socket = io(WS_URL, {
     auth: token ? { token } : undefined,
@@ -46,6 +56,11 @@ export function connectSocket(
   socket.on("connect_error", (err) => {
     statusSubscriber?.("error");
     errorSubscriber?.(err.message || "Connection failed");
+    if (err.message.toLowerCase().includes("authentication")) {
+      socket?.disconnect();
+      socket = null;
+      socketToken = null;
+    }
   });
   socket.io.on("reconnect", () => statusSubscriber?.("connected"));
   socket.io.on("reconnect_failed", () => statusSubscriber?.("error"));
@@ -61,6 +76,7 @@ export function disconnectSocket(): void {
   }
   statusSubscriber = null;
   errorSubscriber = null;
+  socketToken = null;
 }
 
 export function joinSocketRoom(
@@ -101,6 +117,18 @@ export function sendChatMessage(roomId: string, channelId: string, message: stri
   socket?.emit("room-chat", { room: roomId, channel: channelId, message });
 }
 
+export function editChatMessage(messageId: string, content: string, onResult?: (ok: boolean, error?: string) => void): void {
+  socket?.emit("edit-message", { messageId, content }, (response: { ok: boolean; error?: string }) => {
+    onResult?.(response.ok, response.error);
+  });
+}
+
+export function deleteChatMessage(messageId: string, onResult?: (ok: boolean, error?: string) => void): void {
+  socket?.emit("delete-message", { messageId }, (response: { ok: boolean; error?: string }) => {
+    onResult?.(response.ok, response.error);
+  });
+}
+
 export function onChatMessage(handler: (message: Message) => void): () => void {
   if (!socket) return () => {};
 
@@ -109,6 +137,32 @@ export function onChatMessage(handler: (message: Message) => void): () => void {
   return () => {
     socket?.off("room-chat", listener);
   };
+}
+
+export interface MessageEditedEvent {
+  id: string;
+  content: string;
+  editedAt: string | null;
+  roomId: string;
+  channelId: string;
+}
+
+export interface MessageDeletedEvent {
+  id: string;
+  roomId: string;
+  channelId: string;
+}
+
+export function onMessageEdited(handler: (message: MessageEditedEvent) => void): () => void {
+  if (!socket) return () => {};
+  socket.on("message-edited", handler);
+  return () => socket?.off("message-edited", handler);
+}
+
+export function onMessageDeleted(handler: (message: MessageDeletedEvent) => void): () => void {
+  if (!socket) return () => {};
+  socket.on("message-deleted", handler);
+  return () => socket?.off("message-deleted", handler);
 }
 
 export function onSocketError(handler: (message: string) => void): () => void {

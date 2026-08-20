@@ -7,6 +7,19 @@ interface ChatMessagePayload {
   message: string;
 }
 
+interface MessageEditPayload {
+  messageId: string;
+  content: string;
+}
+
+interface MessageDeletePayload {
+  messageId: string;
+}
+
+interface MutationAck {
+  (response: { ok: boolean; error?: string }): void;
+}
+
 export const registerChatHandlers = (io: Server, socket: Socket) => {
   const joinRoom = async (roomId: string) => {
     try {
@@ -122,6 +135,92 @@ export const registerChatHandlers = (io: Server, socket: Socket) => {
     }
   };
 
+  const editMessage = async (data: MessageEditPayload, ack?: MutationAck) => {
+    try {
+      const sender = socket.data.user;
+      const content = data?.content?.trim();
+      if (!sender || !data?.messageId || !content) {
+        ack?.({ ok: false, error: "Message ID and content are required" });
+        return;
+      }
+      if (content.length > 4000) {
+        ack?.({ ok: false, error: "Message is too long" });
+        return;
+      }
+
+      const message = await prisma.message.findFirst({
+        where: { id: data.messageId, userId: sender.id },
+        include: { channel: { select: { id: true, roomId: true } } },
+      });
+      if (!message?.channelId || !message.channel) {
+        ack?.({ ok: false, error: "Message not found" });
+        return;
+      }
+
+      const member = await prisma.room.findFirst({
+        where: { id: message.channel.roomId, members: { some: { id: sender.id } } },
+        select: { id: true },
+      });
+      if (!member) {
+        ack?.({ ok: false, error: "Forbidden: You are not a member of this room" });
+        return;
+      }
+
+      const updated = await prisma.message.update({
+        where: { id: message.id },
+        data: { content, editedAt: new Date() },
+      });
+      io.in(`channel:${message.channelId}`).emit("message-edited", {
+        id: updated.id,
+        content: updated.content,
+        editedAt: updated.editedAt?.toISOString() ?? null,
+        roomId: updated.roomId,
+        channelId: updated.channelId,
+      });
+      ack?.({ ok: true });
+    } catch {
+      ack?.({ ok: false, error: "Failed to edit message" });
+    }
+  };
+
+  const deleteMessage = async (data: MessageDeletePayload, ack?: MutationAck) => {
+    try {
+      const sender = socket.data.user;
+      if (!sender || !data?.messageId) {
+        ack?.({ ok: false, error: "Message ID is required" });
+        return;
+      }
+
+      const message = await prisma.message.findFirst({
+        where: { id: data.messageId, userId: sender.id },
+        include: { channel: { select: { id: true, roomId: true } } },
+      });
+      if (!message?.channelId || !message.channel) {
+        ack?.({ ok: false, error: "Message not found" });
+        return;
+      }
+
+      const member = await prisma.room.findFirst({
+        where: { id: message.channel.roomId, members: { some: { id: sender.id } } },
+        select: { id: true },
+      });
+      if (!member) {
+        ack?.({ ok: false, error: "Forbidden: You are not a member of this room" });
+        return;
+      }
+
+      await prisma.message.delete({ where: { id: message.id } });
+      io.in(`channel:${message.channelId}`).emit("message-deleted", {
+        id: message.id,
+        roomId: message.roomId,
+        channelId: message.channelId,
+      });
+      ack?.({ ok: true });
+    } catch {
+      ack?.({ ok: false, error: "Failed to delete message" });
+    }
+  };
+
   socket.on("join-room", joinRoom);
   socket.on("join-channel", joinChannel);
   socket.on("publish-resource", async (resourceId: string) => {
@@ -134,4 +233,6 @@ export const registerChatHandlers = (io: Server, socket: Socket) => {
   });
   socket.on("leave-channel", (channelId: string) => { if (typeof channelId === "string") socket.leave(`channel:${channelId}`); });
   socket.on("room-chat", handleMessage);
+  socket.on("edit-message", editMessage);
+  socket.on("delete-message", deleteMessage);
 };

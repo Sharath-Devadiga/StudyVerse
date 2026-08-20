@@ -100,6 +100,7 @@ model Message{
   id   String @unique @default(uuid())
   content  String
   createdAt  DateTime  @default(now())
+  editedAt DateTime?
   user   User   @relation(fields: [userId],references: [id])
   userId    String
   room   Room   @relation(fields: [roomId],references: [id])

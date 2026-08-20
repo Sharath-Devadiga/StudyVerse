@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, FileText, Loader2, Paperclip, SendHorizonal, WifiOff, X } from "lucide-react";
+import { AlertCircle, Check, FileText, Loader2, MoreHorizontal, Paperclip, Pencil, SendHorizonal, Trash2, WifiOff, X } from "lucide-react";
 import { Avatar } from "../layout/Avatar";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
 import { formatMessageDate, formatMessageTime } from "../../../lib/utils";
@@ -21,6 +21,8 @@ interface ChatPanelProps {
   sending: boolean;
   onSend: (text: string) => void;
   onRetryMessage: (messageId: string) => void;
+  onEditMessage: (messageId: string, content: string, onError?: (message: string) => void) => void;
+  onDeleteMessage: (messageId: string, onError?: (message: string) => void) => void;
   onReloadHistory: () => void;
   roomId: string;
   channelId: string;
@@ -87,6 +89,8 @@ export function ChatPanel({
   sending,
   onSend,
   onRetryMessage,
+  onEditMessage,
+  onDeleteMessage,
   onReloadHistory,
   roomId,
   channelId,
@@ -98,6 +102,11 @@ export function ChatPanel({
   const [selectedFilePreviewUrl, setSelectedFilePreviewUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<ChatDisplayMessage | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -122,6 +131,11 @@ export function ChatPanel({
     setDraft("");
     setUploadError(null);
     setUploading(false);
+    setOpenMenuId(null);
+    setEditingMessageId(null);
+    setEditDraft("");
+    setDeleteTarget(null);
+    setMutationError(null);
     if (selectedFilePreviewUrl) URL.revokeObjectURL(selectedFilePreviewUrl);
     setSelectedFile(null);
     setSelectedFilePreviewUrl(null);
@@ -243,7 +257,49 @@ export function ChatPanel({
                         />
                       )}
                     </div>
-                    <div className="min-w-0 flex-1">
+                    <div className={`group relative min-w-0 flex-1 ${isMine ? "pr-8" : ""}`}>
+                      {isMine && !message.optimisticState && (
+                        <div className="absolute right-0 top-0 z-10">
+                          <button
+                            type="button"
+                            onClick={() => setOpenMenuId((current) => current === message.id ? null : message.id)}
+                            className="rounded-md p-1 text-gray-400 opacity-100 hover:bg-gray-100 hover:text-gray-700 md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100"
+                            aria-label="Message actions"
+                            aria-expanded={openMenuId === message.id}
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                          {openMenuId === message.id && (
+                            <div className="absolute right-0 top-8 w-28 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingMessageId(message.id);
+                                  setEditDraft(message.content);
+                                  setOpenMenuId(null);
+                                  setMutationError(null);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeleteTarget(message);
+                                  setOpenMenuId(null);
+                                  setMutationError(null);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                       {!grouped && (
                         <div className="flex items-baseline gap-2">
                           <span className="text-sm font-semibold text-gray-900">
@@ -257,6 +313,7 @@ export function ChatPanel({
                           <span className="text-xs text-gray-400">
                             {formatMessageTime(message.createdAt)}
                           </span>
+                          {message.editedAt && <span className="text-xs text-gray-400">(edited)</span>}
                           {message.optimisticState === "sending" && (
                             <span className="text-xs text-blue-500">Sending...</span>
                           )}
@@ -271,7 +328,49 @@ export function ChatPanel({
                           )}
                         </div>
                       )}
-                      {message.content && <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700">{message.content}</p>}
+                      {editingMessageId === message.id ? (
+                        <div className="mt-1 max-w-xl">
+                          <textarea
+                            value={editDraft}
+                            onChange={(event) => setEditDraft(event.target.value)}
+                            rows={2}
+                            autoFocus
+                            className="w-full resize-y rounded-md border border-blue-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none ring-1 ring-blue-100"
+                            aria-label="Edit message"
+                          />
+                          <div className="mt-1.5 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const content = editDraft.trim();
+                                if (!content) {
+                                  setMutationError("Message cannot be empty.");
+                                  return;
+                                }
+                                onEditMessage(message.id, content, (error) => setMutationError(error));
+                                setEditingMessageId(null);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingMessageId(null);
+                                setEditDraft("");
+                                setMutationError(null);
+                              }}
+                              className="rounded-md px-2.5 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : message.content ? (
+                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-700">{message.content}</p>
+                      ) : null}
                       {message.resource && <AttachmentCard resource={message.resource} />}
                     </div>
                   </div>
@@ -282,6 +381,40 @@ export function ChatPanel({
           </ul>
         )}
       </div>
+
+      {mutationError && (
+        <p className="border-t border-red-100 bg-red-50 px-4 py-2 text-center text-xs text-red-700">{mutationError}</p>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/30 px-4">
+          <div className="w-full max-w-sm rounded-lg bg-white p-5 shadow-xl">
+            <h2 className="text-sm font-semibold text-gray-900">Delete this message?</h2>
+            <p className="mt-1 text-sm text-gray-500">This action cannot be undone.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const messageId = deleteTarget.id;
+                  setDeleteTarget(null);
+                  onDeleteMessage(messageId, (error) => setMutationError(error));
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Composer */}
       <div className="border-t border-gray-200 bg-white px-4 py-3">

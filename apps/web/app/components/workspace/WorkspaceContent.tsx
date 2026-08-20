@@ -8,10 +8,8 @@ import {
   Loader2,
   Lock,
   MessageSquare,
-  Menu,
   FolderOpen,
   Sparkles,
-  X,
 } from "lucide-react";
 import { AppHeader } from "../layout/AppHeader";
 import { RoomSidebar } from "./RoomSidebar";
@@ -49,7 +47,6 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
   const [activeChannelId, setActiveChannelId] = useState<string | null>(null);
 
   const [tab, setTab] = useState<Tab>("chats");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const loadRequestRef = useRef(0);
   const lastChannelByRoomRef = useRef<Record<string, string>>({});
 
@@ -172,14 +169,6 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
           <button
             type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 lg:hidden"
-            aria-label="Open workspace sidebar"
-          >
-            <Menu className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
             onClick={() => router.push("/dashboard")}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100"
             aria-label="Back to dashboard"
@@ -207,13 +196,13 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
 
         {/* Tabs */}
         <div className="mx-auto max-w-6xl px-2">
-          <div className="flex gap-1">
+          <div className="flex gap-1 overflow-x-auto">
             {TABS.map(({ key, label, icon: Icon }) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => setTab(key)}
-                className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
+                className={`flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors ${
                   tab === key
                     ? "border-blue-600 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-800"
@@ -223,6 +212,37 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
                 {label}
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Channels (mobile and tablet) */}
+        <div className="border-t border-gray-100 lg:hidden">
+          <div className="mx-auto max-w-6xl overflow-x-auto px-3 py-2">
+            {channelsLoading ? (
+              <div className="px-2 text-xs text-gray-400">Loading channels...</div>
+            ) : channelsError ? (
+              <p className="px-2 text-xs text-red-600">{channelsError}</p>
+            ) : channels.length === 0 ? (
+              <p className="px-2 text-xs text-gray-500">No channels created yet.</p>
+            ) : (
+              <nav aria-label="Study channels" className="flex min-w-max gap-1">
+                {channels.map((channel) => (
+                  <button
+                    key={channel.id}
+                    type="button"
+                    onClick={() => selectChannel(channel.id)}
+                    className={`flex max-w-48 shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm ${
+                      channel.id === activeChannelId
+                        ? "bg-blue-50 font-medium text-blue-700"
+                        : "text-gray-600 hover:bg-gray-100"
+                    }`}
+                  >
+                    <span className="text-gray-400">#</span>
+                    <span className="truncate">{channel.name}</span>
+                  </button>
+                ))}
+              </nav>
+            )}
           </div>
         </div>
       </div>
@@ -241,41 +261,6 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
             memberCountLoading={roomLoading}
           />
         </aside>
-
-        {/* Sidebar (mobile drawer) */}
-        {sidebarOpen && (
-          <div className="fixed inset-0 z-40 lg:hidden">
-            <div
-              className="absolute inset-0 bg-gray-900/40"
-              onClick={() => setSidebarOpen(false)}
-            />
-            <div className="absolute left-0 top-0 flex h-full w-72 flex-col bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-                <span className="text-sm font-semibold text-gray-900">Workspace</span>
-                <button
-                  type="button"
-                  onClick={() => setSidebarOpen(false)}
-                  className="text-gray-400 hover:text-gray-700"
-                  aria-label="Close sidebar"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-              <RoomSidebar
-                channels={channels}
-                channelsLoading={channelsLoading}
-                channelsError={channelsError}
-                activeChannelId={activeChannelId}
-                onSelectChannel={(channelId) => {
-                  selectChannel(channelId);
-                  setSidebarOpen(false);
-                }}
-                memberCount={room?.memberCount ?? null}
-                memberCountLoading={roomLoading}
-              />
-            </div>
-          </div>
-        )}
 
         {/* Main content */}
         <main className="flex min-w-0 flex-1 flex-col bg-white">
@@ -309,6 +294,8 @@ export function WorkspaceContent({ roomId }: { roomId: string }) {
               sending={chat.sending}
               onSend={chat.sendMessage}
               onRetryMessage={chat.retryMessage}
+              onEditMessage={chat.editMessage}
+              onDeleteMessage={chat.deleteMessage}
               onReloadHistory={chat.reloadHistory}
               roomId={roomId}
               channelId={activeChannelId!}

@@ -29,7 +29,8 @@ export function adminMiddleware(
 
     const decoded = jwt.verify(
       token,
-      process.env.JWT_SECRET!
+      process.env.JWT_SECRET!,
+      { algorithms: ["HS256"] }
     ) as CustomJwtPayload;
 
     if (!decoded || decoded.role !== "admin") {

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   connectSocket,
+  getSocketToken,
   joinSocketRoom,
   joinSocketChannel,
   leaveSocketChannel,
@@ -24,6 +25,10 @@ const channelHistoryCache = new Map<string, Message[]>();
 export type ChatDisplayMessage = Message & {
   optimisticState?: "sending" | "failed";
 };
+
+function persistedMessages(messages: ChatDisplayMessage[]): Message[] {
+  return messages.filter((message) => !message.optimisticState);
+}
 
 interface UseRoomChat {
   messages: ChatDisplayMessage[];
@@ -111,15 +116,22 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
   // Manage the Socket.IO connection and room membership.
   useEffect(() => {
     if (!roomId || !channelId) return;
+    let cancelled = false;
+    let cleanupSocket = () => {};
 
     const updateStatus = (s: ConnectionStatus) => {
       setStatus(s);
       setConnectionStatus(s);
     };
 
-    const socket = connectSocket(updateStatus, (message) => {
-      setJoinError(message);
-    });
+    const initializeSocket = async () => {
+      try {
+        const socketToken = await getSocketToken();
+        if (cancelled) return;
+
+        const socket = connectSocket(updateStatus, (message) => {
+          setJoinError(message);
+        }, socketToken);
 
     const attemptJoin = () => {
       setJoinError(null);
@@ -164,13 +176,13 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
             }
             const next = [...prev];
             next[optimisticIndex] = msg;
-            channelHistoryCache.set(scopeKey ?? "", next.filter((item) => !item.optimisticState));
+            channelHistoryCache.set(scopeKey ?? "", persistedMessages(next));
             return next;
           }
         }
 
         const appended = [...prev, msg];
-        channelHistoryCache.set(scopeKey ?? "", appended.filter((item) => !item.optimisticState));
+        channelHistoryCache.set(scopeKey ?? "", persistedMessages(appended));
         return appended;
       });
       setMessagesScopeKey(scopeKey);
@@ -185,7 +197,7 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
             ? { ...message, content: event.content, editedAt: event.editedAt }
             : message
         );
-        channelHistoryCache.set(scopeKey ?? "", next.filter((item) => !item.optimisticState));
+        channelHistoryCache.set(scopeKey ?? "", persistedMessages(next));
         return next;
       });
     });
@@ -194,7 +206,7 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
       if (event.roomId !== roomIdRef.current || event.channelId !== channelId) return;
       setMessages((previous) => {
         const next = previous.filter((message) => message.id !== event.id);
-        channelHistoryCache.set(scopeKey ?? "", next.filter((item) => !item.optimisticState));
+        channelHistoryCache.set(scopeKey ?? "", persistedMessages(next));
         return next;
       });
     });
@@ -218,16 +230,29 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
       setSending(false);
     });
 
+        cleanupSocket = () => {
+          leaveSocketChannel(channelId);
+          offMessage();
+          offEdited();
+          offDeleted();
+          offError();
+          socket.off("connect", attemptJoin);
+          socket.io.off("reconnect", attemptJoin);
+        };
+      } catch {
+        if (!cancelled) {
+          setJoined(false);
+          setJoinError("Unable to authenticate live chat.");
+        }
+      }
+    };
+
+    void initializeSocket();
     return () => {
+      cancelled = true;
       pendingByTempIdRef.current.forEach((pending) => clearTimeout(pending.timeoutId));
       pendingByTempIdRef.current.clear();
-      leaveSocketChannel(channelId);
-      offMessage();
-      offEdited();
-      offDeleted();
-      offError();
-      socket.off("connect", attemptJoin);
-      socket.io.off("reconnect", attemptJoin);
+      cleanupSocket();
     };
   }, [roomId, channelId, scopeKey, setConnectionStatus, user]);
 
@@ -331,7 +356,7 @@ export function useRoomChat(roomId: string | null, channelId: string | null): Us
       if (previous.some((item) => item.id === message.id)) return previous;
       const next = [...previous, message];
       if (cacheKey) {
-        channelHistoryCache.set(cacheKey, next.filter((item) => !item.optimisticState));
+        channelHistoryCache.set(cacheKey, persistedMessages(next));
       }
       return next;
     });

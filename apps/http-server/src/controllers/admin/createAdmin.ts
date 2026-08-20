@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { prisma } from "@repo/db/prisma";
+import { adminCookieOptions, clearAdminCookieOptions } from "../../utils/authCookies";
 
 const JWT_SECRET = process.env.JWT_SECRET as string;
 
@@ -13,9 +14,7 @@ function createAdminToken(adminId: string) {
 
 function setAdminCookie(res: Response, token: string) {
   res.cookie("adminToken", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
+    ...adminCookieOptions,
   });
 }
 
@@ -28,7 +27,7 @@ export const adminSignup = async (req: Request, res: Response) => {
     }
 
     const requiredSetupKey = process.env.ADMIN_SETUP_KEY;
-    if (requiredSetupKey && setupKey !== requiredSetupKey) {
+    if (!requiredSetupKey || setupKey !== requiredSetupKey) {
       return res.status(403).json({ error: "Invalid setup key" });
     }
 
@@ -48,7 +47,7 @@ export const adminSignup = async (req: Request, res: Response) => {
     const token = createAdminToken(newAdmin.id);
     setAdminCookie(res, token);
 
-    res.json({ message: "Admin registered successfully", token });
+    res.json({ message: "Admin registered successfully" });
   } catch (error) {
     console.error("Admin signup failed:", error);
     res.status(500).json({ error: "Signup failed" });
@@ -76,9 +75,14 @@ export const adminSignin = async (req: Request, res: Response) => {
     const token = createAdminToken(admin.id);
     setAdminCookie(res, token);
 
-    res.json({ message: "Signin successful", token });
+    res.json({ message: "Signin successful" });
   } catch (error) {
     console.error("Admin signin failed:", error);
     res.status(500).json({ error: "Signin failed" });
   }
+};
+
+export const adminLogout = (_req: Request, res: Response) => {
+  res.clearCookie("adminToken", clearAdminCookieOptions);
+  res.json({ message: "Logged out successfully" });
 };

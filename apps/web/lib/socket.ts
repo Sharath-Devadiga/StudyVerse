@@ -1,11 +1,10 @@
 import { io, Socket } from "socket.io-client";
 import type { ConnectionStatus, Message } from "./types";
-import { getStoredToken } from "./utils";
+import { apiClient } from "./api/client";
 
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:8080";
 
 let socket: Socket | null = null;
-let socketToken: string | null = null;
 let statusSubscriber: ((status: ConnectionStatus) => void) | null = null;
 let errorSubscriber: ((message: string) => void) | null = null;
 
@@ -15,20 +14,11 @@ export function getSocket(): Socket | null {
 
 export function connectSocket(
   onStatusChange: (status: ConnectionStatus) => void,
-  onError: (message: string) => void
+  onError: (message: string) => void,
+  socketToken: string
 ): Socket {
   statusSubscriber = onStatusChange;
   errorSubscriber = onError;
-
-  const token = getStoredToken();
-
-  // Recreate the singleton when authentication changes or a previous attempt
-  // failed before the user had a valid token.
-  if (socket && socketToken !== token) {
-    socket.removeAllListeners();
-    socket.disconnect();
-    socket = null;
-  }
 
   if (socket) {
     if (socket.connected) {
@@ -40,10 +30,9 @@ export function connectSocket(
   }
 
   onStatusChange("connecting");
-  socketToken = token;
 
   socket = io(WS_URL, {
-    auth: token ? { token } : undefined,
+    auth: { token: socketToken },
     withCredentials: true,
     transports: ["websocket", "polling"],
     reconnection: true,
@@ -56,16 +45,27 @@ export function connectSocket(
   socket.on("connect_error", (err) => {
     statusSubscriber?.("error");
     errorSubscriber?.(err.message || "Connection failed");
-    if (err.message.toLowerCase().includes("authentication")) {
-      socket?.disconnect();
-      socket = null;
-      socketToken = null;
+    if (/authentication|invalid token|token/i.test(err.message)) {
+      void getSocketToken()
+        .then((nextToken) => {
+          if (!socket) return;
+          socket.auth = { token: nextToken };
+          socket.connect();
+        })
+        .catch(() => {
+          errorSubscriber?.("Unable to refresh live chat authentication");
+        });
     }
   });
   socket.io.on("reconnect", () => statusSubscriber?.("connected"));
   socket.io.on("reconnect_failed", () => statusSubscriber?.("error"));
 
   return socket;
+}
+
+export async function getSocketToken(): Promise<string> {
+  const { data } = await apiClient.get<{ token: string }>("/auth/socket-token");
+  return data.token;
 }
 
 export function disconnectSocket(): void {
@@ -76,7 +76,6 @@ export function disconnectSocket(): void {
   }
   statusSubscriber = null;
   errorSubscriber = null;
-  socketToken = null;
 }
 
 export function joinSocketRoom(

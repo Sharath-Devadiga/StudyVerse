@@ -3,6 +3,7 @@ import { prisma } from "@repo/db/prisma";
 import bcrypt from "bcrypt";
 import { generateJwt } from "../utils/generateJwt";
 import { safeUserSelect } from "../utils/safeUser";
+import { authCookieOptions, clearAuthCookieOptions } from "../utils/authCookies";
 
 export const signup = async (req: Request, res: Response) => {
   try {
@@ -62,17 +63,12 @@ export const signin = async (req: Request, res: Response) => {
 
     const token = generateJwt({ id: user.id, email: user.email });
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: process.env.NODE_ENV === "production" ? "strict" : "lax",
-    });
+    res.cookie("token", token, authCookieOptions);
 
     const { password: _, googleId: __, createdAt: ___, departmentId: ____, universityId: _____, ...safeUser } = user;
 
 return res.json({
   message: "Login successful",
-  token,
   user: safeUser,
 });
   } catch (error) {
@@ -82,6 +78,6 @@ return res.json({
 };
 
 export const logout = async (_req: Request, res: Response) => {
-  res.clearCookie("token");
+  res.clearCookie("token", clearAuthCookieOptions);
   return res.json({ message: "Logged out successfully" });
 };

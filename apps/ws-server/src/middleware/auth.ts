@@ -32,8 +32,13 @@ export const authMiddleware = async (
   try {
     const decodedPayload = jwt.verify(
       token,
-      process.env.JWT_SECRET as string
-    ) as { id: string; role?: string };
+      process.env.JWT_SECRET as string,
+      { algorithms: ["HS256"], audience: "studyverse-ws" }
+    ) as { id: string; role?: string; purpose?: string; aud?: string | string[] };
+
+    if (decodedPayload.purpose !== "socket") {
+      return next(new Error("Authentication error: Invalid socket ticket."));
+    }
 
     if (decodedPayload.role === "admin") {
       return next(new Error("Authentication error: Invalid token."));

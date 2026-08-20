@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { adminMiddleware } from "../middleware/admin";
-import { adminSignin, adminSignup } from "../controllers/admin/createAdmin";
+import { adminLogout, adminSignin, adminSignup } from "../controllers/admin/createAdmin";
 import { createUniversity } from "../controllers/admin/createUniversity";
 import { addDepartments } from "../controllers/admin/createDepartments";
 import { createSemesters } from "../controllers/admin/createSemesters";
@@ -11,6 +11,7 @@ const adminRouter: ReturnType<typeof Router> = Router();
 
 adminRouter.post('/adminSignup',adminSignup);
 adminRouter.post('/adminSignin',adminSignin);
+adminRouter.post('/logout', adminLogout);
 adminRouter.get('/me', adminMiddleware, management.adminMe);
 adminRouter.get('/stats', adminMiddleware, management.stats);
 adminRouter.get('/universities', adminMiddleware, management.listUniversities);

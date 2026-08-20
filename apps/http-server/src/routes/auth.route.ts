@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getMe, googleAuth, googleCallback, logout } from "../controllers/auth.controller";
+import { getMe, getSocketToken, googleAuth, googleCallback, logout } from "../controllers/auth.controller";
 import { authenticateToken } from "../middleware/auth";
 import { signin, signup } from "../controllers/userAuth";
 
@@ -9,6 +9,7 @@ router.get("/google", googleAuth);
 router.get("/google/callback", googleCallback);
 
 router.get("/me", authenticateToken, getMe);
+router.get("/socket-token", authenticateToken, getSocketToken);
 router.post("/logout", logout);
 
 router.post("/signup", signup);

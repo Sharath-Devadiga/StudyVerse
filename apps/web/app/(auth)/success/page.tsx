@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { getUserProfile } from "../../../lib/api/user";
 import { getUserRooms } from "../../../lib/api/room";
 import { useAuthStore } from "../../store/AuthStore/useAuthStore";
-import { isOnboardingComplete ,setStoredToken } from "../../../lib/utils";
+import { isOnboardingComplete } from "../../../lib/utils";
 
 export default function AuthSuccessPage() {
   const router = useRouter();
@@ -14,19 +14,6 @@ export default function AuthSuccessPage() {
 
   useEffect(() => {
     let cancelled = false;
-
-    const hash = window.location.hash;
-
-if (hash.startsWith("#token=")) {
-  const token = decodeURIComponent(hash.substring("#token=".length));
-  setStoredToken(token);
-
-  window.history.replaceState(
-    {},
-    document.title,
-    window.location.pathname + window.location.search
-  );
-}
 
     async function finalize() {
       try {

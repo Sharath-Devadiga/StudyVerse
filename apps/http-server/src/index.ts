@@ -10,6 +10,7 @@ import userRouter from "./routes/user";
 import dataRouter from "./routes/data";
 import { prisma } from "@repo/db/prisma";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { originProtection } from "./middleware/originProtection";
 
 const app = express();
 
@@ -24,6 +25,7 @@ app.use(
 
 app.use(cookieParser());
 app.use(express.json({ limit: "15mb" }));
+app.use(originProtection);
 
 app.get("/health", async (_req, res) => {
   try {

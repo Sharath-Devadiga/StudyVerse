@@ -5,11 +5,25 @@ import { OAuth2Client } from "google-auth-library";
 import { prisma } from "@repo/db/prisma";
 import { generateJwt } from "../utils/generateJwt";
 import { safeUserSelect } from "../utils/safeUser";
+import { randomBytes, timingSafeEqual } from "crypto";
+import {
+  authCookieOptions,
+  clearAuthCookieOptions,
+  clearOauthStateCookieOptions,
+  oauthStateCookieOptions,
+} from "../utils/authCookies";
 
 const frontendUrl = () => process.env.FRONTEND_URL || "http://localhost:3000";
+const oauthStateCookie = "oauth_state";
+const oauthActionCookie = "oauth_action";
 
 export const googleAuth = (req: Request, res: Response) => {
-  const action = (req.query.action as string) || "signin";
+  const requestedAction = req.query.action as string;
+  const action = requestedAction === "signup" ? "signup" : "signin";
+  const state = randomBytes(32).toString("hex");
+
+  res.cookie(oauthStateCookie, state, oauthStateCookieOptions);
+  res.cookie(oauthActionCookie, action, oauthStateCookieOptions);
 
   const url = `${GOOGLE_CONFIG.auth_uri}?client_id=${
     GOOGLE_CONFIG.client_id
@@ -17,16 +31,29 @@ export const googleAuth = (req: Request, res: Response) => {
     GOOGLE_CONFIG.redirect_uri
   }&response_type=code&scope=${encodeURIComponent(
     GOOGLE_CONFIG.scope
-  )}&access_type=offline&prompt=consent&state=${action}`;
+  )}&access_type=offline&prompt=consent&state=${encodeURIComponent(state)}`;
 
   res.redirect(url);
 };
 
 export const googleCallback = async (req: Request, res: Response) => {
   const code = req.query.code as string;
-  const action = (req.query.state as string) || "signin";
+  const state = req.query.state as string;
+  const storedState = req.cookies[oauthStateCookie] as string | undefined;
+  const action = req.cookies[oauthActionCookie] === "signup" ? "signup" : "signin";
 
   if (!code) return res.status(400).json({ error: "No code provided" });
+  if (
+    !state ||
+    !storedState ||
+    state.length !== storedState.length ||
+    !timingSafeEqual(Buffer.from(state), Buffer.from(storedState))
+  ) {
+    return res.status(400).json({ error: "Invalid OAuth state" });
+  }
+
+  res.clearCookie(oauthStateCookie, clearOauthStateCookieOptions);
+  res.clearCookie(oauthActionCookie, clearOauthStateCookieOptions);
 
   try {
     const params = new URLSearchParams({
@@ -58,7 +85,10 @@ export const googleCallback = async (req: Request, res: Response) => {
     const payload = ticket.getPayload();
     if (!payload) return res.status(400).json({ error: "Invalid ID token" });
 
-    const { sub, email, name, picture } = payload;
+    const { sub, email, email_verified: emailVerified, name, picture } = payload;
+    if (!sub || !email || emailVerified !== true) {
+      return res.status(400).json({ error: "Google account verification failed" });
+    }
     const safeName: string = name ?? (email?.split("@")[0] ?? "Unknown");
 
     let user = await prisma.user.findUnique({
@@ -86,15 +116,8 @@ export const googleCallback = async (req: Request, res: Response) => {
 
     const token = generateJwt({ id: user.id, email: user.email });
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none",
-    });
-
-      res.redirect(
-        `${frontendUrl()}/success?action=${action}#token=${encodeURIComponent(token)}`
-      );
+    res.cookie("token", token, authCookieOptions);
+    res.redirect(`${frontendUrl()}/success?action=${action}`);
   } catch (e) {
     console.error("Google OAuth error");
     res.status(500).json({ error: "Google authentication failed" });
@@ -120,7 +143,21 @@ export const getMe = async (req: Request, res: Response) => {
   }
 };
 
+export const getSocketToken = (req: Request, res: Response) => {
+  const authUser = (req as Request & { user: { id: string; email: string } }).user;
+  const token = generateJwt(
+    {
+      id: authUser.id,
+      email: authUser.email,
+      purpose: "socket",
+      aud: "studyverse-ws",
+    },
+    "60s"
+  );
+  res.json({ token });
+};
+
 export const logout = (_req: Request, res: Response) => {
-  res.clearCookie("token");
+  res.clearCookie("token", clearAuthCookieOptions);
   res.json({ message: "Logged out successfully" });
 };

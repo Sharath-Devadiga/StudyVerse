@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { AuthState } from "./types";
 import { logout as logoutApi } from "../../../lib/api/auth";
-import { clearStoredToken } from "../../../lib/utils";
+import { disconnectSocket } from "../../../lib/socket";
 
 export const useAuthStore = create<AuthState>()(
   persist(
@@ -35,7 +35,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       reset: () => {
-        clearStoredToken();
+        disconnectSocket();
         set({
           user: null,
           isAuthenticated: false,
@@ -51,7 +51,7 @@ export const useAuthStore = create<AuthState>()(
         } catch {
           // Clear local state even if server logout fails
         } finally {
-          clearStoredToken();
+          disconnectSocket();
           set({
             user: null,
             isAuthenticated: false,

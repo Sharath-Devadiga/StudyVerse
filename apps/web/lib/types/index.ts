@@ -54,6 +54,7 @@ export interface Message {
   id: string;
   content: string;
   createdAt: string;
+  editedAt?: string | null;
   userId: string;
   roomId: string;
   channelId: string | null;
@@ -81,7 +82,6 @@ export interface ApiError {
 
 export interface SigninResponse {
   message: string;
-  token: string;
   user: User;
 }
 

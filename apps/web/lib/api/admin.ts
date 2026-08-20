@@ -1,10 +1,10 @@
 import axios from "axios";
 
 const adminClient = axios.create({ baseURL: process.env.NEXT_PUBLIC_BACKEND_URL ?? "", withCredentials: true, headers: { "Content-Type": "application/json" } });
-adminClient.interceptors.request.use((config) => { const token = typeof window === "undefined" ? null : localStorage.getItem("studyverse-admin-token"); if (token) config.headers.Authorization = `Bearer ${token}`; return config; });
 
 export const adminApi = {
-  login: async (username: string, password: string) => (await adminClient.post("/admin/adminSignin", { username, password })).data as { token: string },
+  login: async (username: string, password: string) => (await adminClient.post("/admin/adminSignin", { username, password })).data as { message: string },
+  logout: async () => { await adminClient.post("/admin/logout"); },
   me: async () => (await adminClient.get("/admin/me")).data,
   stats: async () => (await adminClient.get("/admin/stats")).data as Record<string, number>,
   list: async <T>(path: string) => (await adminClient.get<T[]>(`/admin/${path}`)).data,

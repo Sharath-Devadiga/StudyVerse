@@ -1,15 +1,11 @@
 import { apiClient } from "./client";
 import type { SigninResponse, User } from "../types";
-import { setStoredToken, clearStoredToken } from "../utils";
 
 export async function signin(email: string, password: string): Promise<SigninResponse> {
   const { data } = await apiClient.post<SigninResponse>("/auth/signin", {
     email,
     password,
   });
-  if (data.token) {
-    setStoredToken(data.token);
-  }
   return data;
 }
 
@@ -23,11 +19,7 @@ export async function signup(
 }
 
 export async function logout(): Promise<void> {
-  try {
-    await apiClient.post("/auth/logout");
-  } finally {
-    clearStoredToken();
-  }
+  await apiClient.post("/auth/logout");
 }
 
 export async function getAuthMe(): Promise<User> {

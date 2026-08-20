@@ -92,7 +92,9 @@ export const googleCallback = async (req: Request, res: Response) => {
       sameSite: "none",
     });
 
-    res.redirect(`${frontendUrl()}/success?action=${action}`);
+      res.redirect(
+        `${frontendUrl()}/success?action=${action}#token=${encodeURIComponent(token)}`
+      );
   } catch (e) {
     console.error("Google OAuth error");
     res.status(500).json({ error: "Google authentication failed" });

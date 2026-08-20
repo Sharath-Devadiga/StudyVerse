@@ -88,8 +88,8 @@ export const googleCallback = async (req: Request, res: Response) => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: true,
+      sameSite: "none",
     });
 
     res.redirect(`${frontendUrl()}/success?action=${action}`);

@@ -11,15 +11,11 @@ export const metadata: Metadata = {
     "StudyVerse connects students by university, department, and semester to share knowledge and study together in real time.",
 };
 
-
-
 export const viewport: Viewport = {
-  themeColor: "#2563eb",
+  themeColor: "#0f172a",
   width: "device-width",
   initialScale: 1,
 };
-
-
 
 export default function RootLayout({
   children,
@@ -27,8 +23,26 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} bg-gray-50`}>
-      <body className="min-h-screen bg-gray-50 font-sans text-gray-900 antialiased">
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={`${inter.variable} bg-slate-50 dark:bg-slate-950`}
+    >
+      <body className="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased transition-colors duration-200 dark:bg-slate-950 dark:text-slate-100">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                const stored = localStorage.getItem('studyverse-theme');
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                const theme = stored === 'light' || stored === 'dark' ? stored : (prefersDark ? 'dark' : 'light');
+                const root = document.documentElement;
+                root.classList.toggle('dark', theme === 'dark');
+                root.style.colorScheme = theme;
+              } catch (e) {}
+            `,
+          }}
+        />
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -1,10 +1,24 @@
+"use client";
+
 import Link from "next/link";
+import { Moon, SunMedium } from "lucide-react";
+import { useTheme } from "next-themes";
+import { useEffect, useState } from "react";
 
 export function LandingPlaceholder() {
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const isDark = mounted && resolvedTheme === "dark";
+
   return (
-    <div className="min-h-screen bg-white text-slate-950">
+    <div className="min-h-screen bg-white text-slate-950 transition-colors dark:bg-slate-950 dark:text-slate-50">
       {/* Navbar */}
-      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur">
+      <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-white/90 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
           <Link href="/" className="flex items-center">
   <img
@@ -14,22 +28,31 @@ export function LandingPlaceholder() {
   />
 </Link>
 
-          <nav className="hidden items-center gap-8 text-sm text-slate-500 md:flex">
-            <a href="#features" className="transition hover:text-slate-950">
+          <nav className="hidden items-center gap-8 text-sm text-slate-500 md:flex dark:text-slate-300">
+            <a href="#features" className="transition hover:text-slate-950 dark:hover:text-slate-100">
               Features
             </a>
-            <a href="#ai-summary" className="transition hover:text-slate-950">
+            <a href="#ai-summary" className="transition hover:text-slate-950 dark:hover:text-slate-100">
               AI Summary
             </a>
-            <a href="#how-it-works" className="transition hover:text-slate-950">
+            <a href="#how-it-works" className="transition hover:text-slate-950 dark:hover:text-slate-100">
               How it works
             </a>
           </nav>
 
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setTheme(isDark ? "light" : "dark")}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+            >
+              {isDark ? <SunMedium className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+            </button>
+
             <Link
               href="/login"
-              className="hidden text-sm font-medium text-slate-600 transition hover:text-slate-950 sm:block"
+              className="hidden text-sm font-medium text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-slate-100 sm:block"
             >
               Log in
             </Link>
